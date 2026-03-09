@@ -1,0 +1,26 @@
+export const AGENCIES = [
+  {
+    id: "1",
+    name: "Phòng CSGT Công an Tỉnh Đồng Nai",
+    phone: "02513829123",
+    address: "161 Phạm Văn Thuận, Tam Hiệp, Đồng Nai",
+    lat: 10.953,
+    lng: 106.865,
+    province: "Đồng Nai",
+    district: "Biên Hòa",
+    ward: "Tam Hiệp",
+    type: "csgt",
+  },
+  {
+    id: "2",
+    name: "Đội TTKS Cao tốc số 7",
+    phone: "0283829123",
+    address: "71 Huỳnh Thúc Kháng, Bến Thành, TP HCM",
+    lat: 10.777,
+    lng: 106.700,
+    province: "TP HCM",
+    district: "Quận 1",
+    ward: "Bến Thành",
+    type: "csgt",
+  },
+];
