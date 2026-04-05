@@ -5,5 +5,8 @@
     "explore": "Khám phá",
     "skills": "Kỹ năng",
     "back": "Quay lại",
-    "createWarning": "Tạo cảnh báo"
+    "createWarning": "Tạo cảnh báo",
+    "register": "Đăng ký",
+    "login": "Đăng nhập",
+    "verify": "Xác minh"
 }

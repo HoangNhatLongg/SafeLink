@@ -29,46 +29,7 @@ export type Post = {
 };
 
 export const MOCK_POSTS: Post[] = [
-  {
-    id: "1",
-    username: "Nguyễn Văn A",
-    avatar: require('../Uploads/AnhDaiDien.jpg'),
-    reputation: 120,
-    location: "Đắk Lắk",
-    time: "2 giờ trước",
-    score: 35,
-    title: "Cảnh báo ngập cục bộ",
-    hashtag: "canhbao",
-    content:
-      "Khu vực đường Lê Duẩn đang ngập khá nặng, mọi người di chuyển cẩn thận.",
-    images: [
-      "https://fastly.picsum.photos/id/1029/200/300.jpg?hmac=VpePgDBTGFZYhRTeOD9o6nCvZB_01SrIHCMMkoZal_A"
-    ],
-    likes: 40,
-    dislikes: 2,
-    commentsCount: 3,
-    shares: 5,
-    comments: [
-      {
-        id: "c1",
-        user: "Trần Thị B",
-        avatar: require('../Uploads/AnhDaiDien.jpg'),
-        content: "Mình vừa đi qua, đúng là ngập thật.",
-        likes: 5,
-        dislikes: 0,
-        replies: [
-          {
-            id: "r1",
-            user: "Nguyễn Văn A",
-            avatar: "https://i.pravatar.cc/150?img=1",
-            content: "Cảm ơn bạn đã xác nhận.",
-            likes: 2,
-            dislikes: 0,
-          },
-        ],
-      },
-    ],
-  },
+  
 
   // 3 ảnh (test layout 1 lớn 2 nhỏ)
   {

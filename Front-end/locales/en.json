@@ -5,5 +5,8 @@
     "explore": "Explore",
     "skills": "Skills",
     "back": "Back",
-    "createWarning": "Create Warning"
+    "createWarning": "Create Warning",
+    "register": "Register",
+    "login": "Login",
+    "verify": "verify"
 }
