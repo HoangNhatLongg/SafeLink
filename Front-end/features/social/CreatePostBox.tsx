@@ -2,6 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import React, { useState } from "react";
 import {
+    ActivityIndicator,
+    Alert,
     Image,
     ScrollView,
     StyleSheet,
@@ -10,6 +12,14 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { createPostFormData } from "@/features/social/services/postsApi";
+
+type MediaItem = {
+  type: "image" | "video";
+  uri: string;
+  mimeType?: string;
+  fileName?: string;
+};
 
 type Props = {
   onSubmit: (post: any) => void;
@@ -17,8 +27,9 @@ type Props = {
 
 export default function CreatePostBox({ onSubmit }: Props) {
   const [content, setContent] = useState("");
-  const [media, setMedia] = useState<any[]>([]);
+  const [media, setMedia] = useState<MediaItem[]>([]);
   const [hashtag, setHashtag] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const pickMedia = async (type: "image" | "video") => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -30,41 +41,53 @@ export default function CreatePostBox({ onSubmit }: Props) {
     });
 
     if (!result.canceled) {
-      setMedia([
-        ...media,
+      const asset = result.assets[0];
+      setMedia((prev) => [
+        ...prev,
         {
           type,
-          uri: result.assets[0].uri,
+          uri: asset.uri,
+          mimeType: asset.mimeType,
+          fileName: asset.fileName ?? undefined,
         },
       ]);
     }
   };
 
-  const handleSubmit = () => {
-    if (!content && media.length === 0) return;
+  /** Gửi bài viết lên server qua FormData (hỗ trợ ảnh + video) */
+  const handleSubmit = async () => {
+    if (!content.trim() && media.length === 0) return;
+    setLoading(true);
+    try {
+      const form = new FormData();
+      if (content.trim()) form.append("content", content.trim());
+      if (hashtag.trim()) form.append("hashtag", hashtag.trim());
 
-    const newPost = {
-      id: Date.now().toString(),
-      username: "Bạn",
-      avatar: require('../Uploads/AnhDaiDien.jpg'),
-      reputation: 100,
-      location: "Đắk Lắk",
-      title: "",
-      hashtag,
-      content,
-      media,
-      likes: 0,
-      dislikes: 0,
-      commentsCount: 0,
-      shares: 0,
-    };
+      for (const item of media) {
+        const isVideo = item.type === "video";
+        const fieldName = isVideo ? "videos" : "images";
+        const fallbackExt = isVideo ? "mp4" : "jpg";
+        const fallbackMime = isVideo ? "video/mp4" : "image/jpeg";
+        // React Native FormData chấp nhận object { uri, name, type }
+        (form as any).append(fieldName, {
+          uri: item.uri,
+          name: item.fileName ?? `media_${Date.now()}.${fallbackExt}`,
+          type: item.mimeType ?? fallbackMime,
+        });
+      }
 
-    onSubmit(newPost);
+      const result = await createPostFormData(form);
+      onSubmit(result.post);
 
-    // Reset
-    setContent("");
-    setMedia([]);
-    setHashtag("");
+      // Reset
+      setContent("");
+      setMedia([]);
+      setHashtag("");
+    } catch (e: any) {
+      Alert.alert("Đăng bài thất bại", e?.message ?? "Lỗi không xác định. Vui lòng thử lại.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -90,6 +113,11 @@ export default function CreatePostBox({ onSubmit }: Props) {
           {media.map((item, index) => (
             <View key={index} style={styles.previewWrapper}>
               <Image source={{ uri: item.uri }} style={styles.preview} />
+              {item.type === "video" && (
+                <View style={styles.videoBadge}>
+                  <Text style={styles.videoBadgeText}>VIDEO</Text>
+                </View>
+              )}
             </View>
           ))}
         </ScrollView>
@@ -103,16 +131,24 @@ export default function CreatePostBox({ onSubmit }: Props) {
       />
 
       <View style={styles.actions}>
-        <TouchableOpacity onPress={() => pickMedia("image")}>
-          <Ionicons name="image" size={22} color="#4CAF50" />
+        <TouchableOpacity onPress={() => pickMedia("image")} disabled={loading}>
+          <Ionicons name="image" size={22} color={loading ? "#ccc" : "#4CAF50"} />
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => pickMedia("video")}>
-          <Ionicons name="videocam" size={22} color="#2196F3" />
+        <TouchableOpacity onPress={() => pickMedia("video")} disabled={loading}>
+          <Ionicons name="videocam" size={22} color={loading ? "#ccc" : "#2196F3"} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.postBtn} onPress={handleSubmit}>
-          <Text style={styles.postText}>Đăng</Text>
+        <TouchableOpacity
+          style={[styles.postBtn, loading && styles.postBtnDisabled]}
+          onPress={handleSubmit}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.postText}>Đăng</Text>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -163,9 +199,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 20,
+    minWidth: 56,
+    alignItems: "center",
+  },
+  postBtnDisabled: {
+    backgroundColor: "#90b8f8",
   },
   postText: {
     color: "white",
     fontWeight: "600",
+  },
+  videoBadge: {
+    position: "absolute",
+    bottom: 4,
+    left: 4,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  videoBadgeText: {
+    color: "#fff",
+    fontSize: 9,
+    fontWeight: "700",
   },
 });

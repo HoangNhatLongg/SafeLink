@@ -44,4 +44,8 @@ app.use("/api/users", followRoutes);
 // Moderation (moderator/admin)
 app.use("/api/moderation", moderationRoutes);
 
+// Search API (Global Search & Tags)
+import searchRoutes from "./routes/searchRoutes.js";
+app.use("/api/search", searchRoutes);
+
 export default app;

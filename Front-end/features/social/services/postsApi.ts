@@ -42,6 +42,19 @@ export async function createPostFormData(form: FormData) {
   return parseJson(res);
 }
 
+export async function updatePostFormData(id: string, form: FormData) {
+  const res = await apiFetch(`/api/posts/${id}`, {
+    method: "PUT",
+    body: form,
+  });
+  return parseJson(res);
+}
+
+export async function deletePost(id: string) {
+  const res = await apiFetch(`/api/posts/${id}`, { method: "DELETE" });
+  return parseJson<{ message: string }>(res);
+}
+
 export async function likePost(id: string) {
   const res = await apiFetch(`/api/posts/${id}/like`, { method: "POST", body: JSON.stringify({}) });
   return parseJson<{
@@ -108,4 +121,45 @@ export async function addComment(postId: string, content: string) {
     body: JSON.stringify({ content }),
   });
   return parseJson(res);
+}
+
+/* ── Follow API ─────────────────────────────────────────────────── */
+
+export async function followUser(userId: string) {
+  const res = await apiFetch(`/api/users/${userId}/follow`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  return parseJson<{ message: string }>(res);
+}
+
+export async function unfollowUser(userId: string) {
+  const res = await apiFetch(`/api/users/${userId}/follow`, { method: "DELETE" });
+  return parseJson<{ message: string }>(res);
+}
+
+export async function fetchFollowers(userId: string, search: string = "", page = 1, limit = 20) {
+  const q = new URLSearchParams({ search, page: String(page), limit: String(limit) });
+  const res = await apiFetch(`/api/users/${userId}/followers?${q.toString()}`);
+  return parseJson<{ followers: any[]; pagination: Pagination }>(res);
+}
+
+export async function fetchFollowing(userId: string, search: string = "", page = 1, limit = 20) {
+  const q = new URLSearchParams({ search, page: String(page), limit: String(limit) });
+  const res = await apiFetch(`/api/users/${userId}/following?${q.toString()}`);
+  return parseJson<{ following: any[]; pagination: Pagination }>(res);
+}
+
+/* ── Search API ─────────────────────────────────────────────────── */
+
+export async function fetchGlobalSearch(qStr: string, type: string, page = 1, limit = 20) {
+  const q = new URLSearchParams({ q: qStr, type, page: String(page), limit: String(limit) });
+  const res = await apiFetch(`/api/search?${q.toString()}`);
+  return parseJson<{ users: any[]; posts: any[]; pagination: any }>(res);
+}
+
+export async function fetchTagSuggestions(qStr: string) {
+  const q = new URLSearchParams({ q: qStr });
+  const res = await apiFetch(`/api/search/tags/suggest?${q.toString()}`);
+  return parseJson<{ tags: string[] }>(res);
 }

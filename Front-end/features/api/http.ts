@@ -1,7 +1,8 @@
 import { API_BASE } from "@/constants/api";
 import { clearSession, getToken } from "@/features/auth/utils/storage";
 
-const TIMEOUT_MS = 20000;
+/** Upload video lớn (200MB) qua Wi-Fi cần đủ thời gian — 5 phút */
+const TIMEOUT_MS = 5 * 60 * 1000;
 
 /** Gọi khi token hết hạn / không hợp lệ (401 có Bearer). Đăng ký từ Root layout. */
 let onSessionExpired: ((serverMessage?: string) => void) | null = null;
@@ -48,7 +49,7 @@ export async function apiFetch(path: string, options: RequestInit = {}, skipAuth
     clearTimeout(tid);
     if (e?.name === "AbortError") {
       throw new ApiError(
-        "Không kết nối được máy chủ. Kiểm tra API_BASE trong constants/api.ts và mạng Wi-Fi.",
+        "Yêu cầu bị timeout (quá 5 phút). Nếu đang upload video lớn hãy thử lại trên Wi-Fi tốt hơn. Nếu không phải upload, kiểm tra API_BASE trong constants/api.ts và mạng Wi-Fi.",
         0
       );
     }

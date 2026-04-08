@@ -51,8 +51,7 @@ export default function RootLayout() {
           <Stack.Screen
             name="create-post"
             options={{
-              title: t('createWarning'),
-              headerBackTitle: t('back'),
+              headerShown: false,
             }}
           />
           <Stack.Screen
@@ -90,7 +89,7 @@ export default function RootLayout() {
           <Stack.Screen
             name="profile"
             options={{
-              title: "Hồ sơ",
+              title: "Trang cá nhân",
               headerBackTitle: t('back'),
             }}
           />
@@ -116,6 +115,32 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen name="oauth" options={{ title: "Đăng nhập", headerShown: false }} />
+          <Stack.Screen
+            name="privacy"
+            options={{
+              presentation: "modal",
+              title: "Quyền riêng tư",
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="user/[id]"
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="search"
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="followers-list"
+            options={{
+              headerShown: false,
+            }}
+          />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>

@@ -1,5 +1,6 @@
 export type FeedPostUi = {
   id: string;
+  authorId?: string;
   username: string;
   avatar: string | number;
   reputation: number;
@@ -60,13 +61,14 @@ export function mapApiPostToUi(p: any): FeedPostUi {
 
   return {
     id: String(p._id || p.id),
+    authorId: String(author._id || author.id || author),
     username: name,
     avatar,
     reputation: typeof p.score === "number" ? p.score : 0,
     location: locationStr,
     time: formatRelative(p.createdAt),
     title: "",
-    hashtag: p.visibility ? `#${p.visibility}` : "",
+    hashtag: "",
     content: p.content || "",
     images: images.length ? images : undefined,
     video,

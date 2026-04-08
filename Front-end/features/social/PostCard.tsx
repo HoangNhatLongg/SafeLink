@@ -8,15 +8,15 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   Share,
   ActivityIndicator,
 } from "react-native";
-import MediaGrid from "./MediaGrid";
-import MediaViewerModal from "./MediaViewerModal";
+import MediaGrid, { MediaViewerModal, setFeedVideoMuted } from "./MediaGrid";
 import type { FeedPostUi } from "./mapPost";
-import { getToken } from "@/features/auth/utils/storage";
+import { getToken, getUserJson } from "@/features/auth/utils/storage";
 import { useRouter } from "expo-router";
 import {
   dislikePost,
@@ -25,6 +25,7 @@ import {
   sharePost,
   toggleHidePost,
   toggleSavePost,
+  deletePost,
   type ReportReason,
 } from "@/features/social/services/postsApi";
 
@@ -45,12 +46,37 @@ type Props = {
   onHidden?: (id: string) => void;
 };
 
+const FALLBACK_AVATAR = require("@/Uploads/AnhDaiDien.jpg");
+
+function getAvatarSource(avatar: string | number) {
+  if (typeof avatar === "number") return avatar; // local require()
+  if (typeof avatar === "string" && avatar.startsWith("http")) return { uri: avatar };
+  return FALLBACK_AVATAR;
+}
+
+function VisibilityIcon({ visibility }: { visibility?: string }) {
+  if (!visibility) return null;
+  const map: Record<string, { name: keyof typeof Ionicons.glyphMap; color: string }> = {
+    public:  { name: "globe",   color: "#1877F2" },
+    friends: { name: "people",  color: "#31A24C" },
+    private: { name: "lock-closed", color: "#90949C" },
+  };
+  const cfg = map[visibility] ?? map["public"];
+  return (
+    <View style={{ marginLeft: 4, justifyContent: "center" }}>
+      <Ionicons name={cfg.name} size={13} color={cfg.color} />
+    </View>
+  );
+}
+
 export default function PostCard({ post, onUpdated, onOpenComments, onHidden }: Props) {
   const router = useRouter();
   const [viewerVisible, setViewerVisible] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [reportVisible, setReportVisible] = useState(false);
+  const [optionsVisible, setOptionsVisible] = useState(false);
+  const [isOwnerOrMod, setIsOwnerOrMod] = useState({ isOwner: false, isMod: false });
 
   const media = useMemo(() => {
     const result: { type: "image" | "video"; uri: string }[] = [];
@@ -155,6 +181,16 @@ export default function PostCard({ post, onUpdated, onOpenComments, onHidden }: 
     }
   };
 
+  const handleDeletePost = async () => {
+    try {
+      await deletePost(post.id);
+      onHidden?.(post.id);
+      Alert.alert("", "Đã xóa bài viết.");
+    } catch (e: any) {
+      Alert.alert("Lỗi", e.message);
+    }
+  };
+
   const submitReport = async (reason: ReportReason) => {
     setReportVisible(false);
     if (!(await requireAuth())) return;
@@ -166,23 +202,37 @@ export default function PostCard({ post, onUpdated, onOpenComments, onHidden }: 
     }
   };
 
-  const openMenu = () => {
-    Alert.alert("Tùy chọn", post.username, [
-      { text: "Báo cáo", onPress: () => setReportVisible(true) },
-      { text: "Ẩn bài viết", onPress: handleHide },
-      { text: "Đóng", style: "cancel" },
-    ]);
+  const openMenu = async () => {
+    const me = await getUserJson();
+    setIsOwnerOrMod({
+      isOwner: me?.id === post.authorId,
+      isMod: me?.role === "admin" || me?.role === "moderator"
+    });
+    setOptionsVisible(true);
+  };
+
+  const openAuthorProfile = () => {
+    if (post.authorId) {
+      router.push({ pathname: "/user/[id]", params: { id: post.authorId } });
+    }
   };
 
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <Image
-          source={typeof post.avatar === "string" ? { uri: post.avatar } : post.avatar}
-          style={styles.avatar}
-        />
+        <TouchableOpacity onPress={openAuthorProfile} activeOpacity={0.8}>
+          <Image
+            source={getAvatarSource(post.avatar)}
+            style={styles.avatar}
+          />
+        </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={styles.username}>{post.username}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <TouchableOpacity onPress={openAuthorProfile} activeOpacity={0.8}>
+              <Text style={styles.username}>{post.username}</Text>
+            </TouchableOpacity>
+            <VisibilityIcon visibility={post.visibility} />
+          </View>
           <View style={styles.metaRow}>
             <Text style={styles.location} numberOfLines={1}>
               📍 {post.location}
@@ -199,15 +249,36 @@ export default function PostCard({ post, onUpdated, onOpenComments, onHidden }: 
         </TouchableOpacity>
       </View>
 
-      {post.hashtag ? (
-        <Text style={styles.hashtagLine}>
-          <Text style={styles.hashtag}>{post.hashtag}</Text>
-        </Text>
-      ) : null}
+      {(() => {
+        if (!post.content) return null;
+        const words = post.content.split(/(\s+)/);
+        return (
+          <Text style={styles.content}>
+            {words.map((word, i) => {
+              if (word.startsWith("#") && word.length > 1) {
+                return (
+                  <Text 
+                    key={i} 
+                    style={{ color: "#1877f2", fontWeight: "600" }}
+                    onPress={() => router.push({ pathname: "/search", params: { q: word } })}
+                  >
+                    {word}
+                  </Text>
+                );
+              }
+              return <Text key={i}>{word}</Text>;
+            })}
+          </Text>
+        );
+      })()}
 
-      <Text style={styles.content}>{post.content}</Text>
-
-      {media.length > 0 && <MediaGrid media={media} onOpen={openViewer} />}
+      {media.length > 0 && (
+        <MediaGrid
+          media={media}
+          postId={post.id}
+          onOpen={openViewer}
+        />
+      )}
 
       <View style={styles.stats}>
         <Text style={post.userReaction === "like" ? styles.statActive : undefined}>
@@ -258,6 +329,51 @@ export default function PostCard({ post, onUpdated, onOpenComments, onHidden }: 
         onClose={() => setViewerVisible(false)}
       />
 
+      {/* Options Modal */}
+      <Modal visible={optionsVisible} transparent animationType="fade" onRequestClose={() => setOptionsVisible(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setOptionsVisible(false)}>
+          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.modalTitle}>Tùy chọn bài viết</Text>
+            
+            {isOwnerOrMod.isOwner && (
+              <TouchableOpacity style={styles.modalRow} onPress={() => { 
+                setOptionsVisible(false); 
+                router.push({ pathname: "/create-post", params: { editId: post.id } }); 
+              }}>
+                <Text style={styles.modalRowText}>Sửa bài viết</Text>
+              </TouchableOpacity>
+            )}
+
+            {(isOwnerOrMod.isOwner || isOwnerOrMod.isMod) && (
+              <TouchableOpacity style={styles.modalRow} onPress={() => { 
+                setOptionsVisible(false); 
+                Alert.alert("Xác nhận", "Bạn có chắc chắn muốn xóa bài viết này?", [
+                  { text: "Hủy", style: "cancel" },
+                  { text: "Xóa", style: "destructive", onPress: async () => {
+                      if (!(await requireAuth())) return;
+                      handleDeletePost();
+                  }}
+                ]);
+              }}>
+                <Text style={[styles.modalRowText, { color: "#e53935" }]}>Xóa bài viết</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.modalRow} onPress={() => { setOptionsVisible(false); setReportVisible(true); }}>
+              <Text style={styles.modalRowText}>Báo cáo</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalRow} onPress={() => { setOptionsVisible(false); handleHide(); }}>
+              <Text style={styles.modalRowText}>Ẩn bài viết</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalCancel} onPress={() => setOptionsVisible(false)}>
+              <Text style={styles.modalCancelText}>Đóng</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+      {/* Report Modal */}
       <Modal visible={reportVisible} transparent animationType="fade" onRequestClose={() => setReportVisible(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setReportVisible(false)}>
           <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>

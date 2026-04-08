@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 const UPLOAD_DIR = path.join(__dirname, "../../../uploads");
 
 // Tạo thư mục nếu chưa có
-["images", "videos"].forEach((sub) => {
+["images", "videos", "avatars", "covers"].forEach((sub) => {
   const dir = path.join(UPLOAD_DIR, sub);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
@@ -62,14 +62,16 @@ const fileFilter = (req, file, cb) => {
 // Giới hạn kích thước: ảnh 15MB, video 200MB
 const limits = { fileSize: 200 * 1024 * 1024 }; // 200MB max
 
+/**
+ * Upload ảnh + video cho bài viết.
+ * Dùng .any() thay vì .fields() để cho phép gửi cùng lúc ảnh và video
+ * (multer.fields bắt buộc mỗi field phải có ít nhất 1 file → không tương thích khi chỉ gửi 1 loại).
+ */
 export const uploadPostMedia = multer({
   storage,
   fileFilter,
   limits,
-}).fields([
-  { name: "images", maxCount: 10 },
-  { name: "videos", maxCount: 2 },
-]);
+}).any();
 
 /**
  * Helper: chuyển đường dẫn file thành URL trả về client
@@ -80,3 +82,41 @@ export const getMediaUrl = (req, filePath) => {
   const pathAfterUploads = relativePath.substring(uploadsIndex);
   return `${req.protocol}://${req.get("host")}/${pathAfterUploads}`;
 };
+
+/**
+ * Upload Avatar (1 file)
+ */
+const storageAvatar = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(UPLOAD_DIR, "avatars"));
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `avatar-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+  },
+});
+
+export const uploadAvatarMedia = multer({
+  storage: storageAvatar,
+  fileFilter,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+}).single("avatar");
+
+/**
+ * Upload Cover (1 file)
+ */
+const storageCover = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(UPLOAD_DIR, "covers"));
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `cover-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+  },
+});
+
+export const uploadCoverMedia = multer({
+  storage: storageCover,
+  fileFilter,
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB
+}).single("cover");

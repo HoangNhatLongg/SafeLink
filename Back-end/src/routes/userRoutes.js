@@ -1,11 +1,27 @@
 import express from "express";
-import { verifyToken } from "../middleware/authMiddleware.js";
-import { getCurrentUser, updateCurrentUser } from "../controllers/userController.js";
+import { verifyToken, optionalAuth } from "../middleware/authMiddleware.js";
+import { uploadAvatarMedia, uploadCoverMedia } from "../middleware/upload.js";
+import {
+  getCurrentUser,
+  updateCurrentUser,
+  getUserProfile,
+  updateAvatar,
+  updateCover,
+  getSuggestedUsers,
+} from "../controllers/userController.js";
 
 const router = express.Router();
 
-router.use(verifyToken);
-router.get("/me", getCurrentUser);
-router.patch("/me", updateCurrentUser);
+// Trang cá nhân (yêu cầu đăng nhập)
+router.get("/me", verifyToken, getCurrentUser);
+router.patch("/me", verifyToken, updateCurrentUser);
+router.post("/me/avatar", verifyToken, uploadAvatarMedia, updateAvatar);
+router.post("/me/cover", verifyToken, uploadCoverMedia, updateCover);
+
+// Suggest users to follow
+router.get("/suggestions", verifyToken, getSuggestedUsers);
+
+// Xem profile người khác (auth optional — để biết isFollowing)
+router.get("/:id/profile", optionalAuth, getUserProfile);
 
 export default router;

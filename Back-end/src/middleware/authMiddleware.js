@@ -47,3 +47,25 @@ export const verifyToken = async (req, res, next) => {
     return res.status(401).json({ message: "Token is not valid." });
   }
 };
+
+/**
+ * Optional auth — attaches req.user if token is valid, otherwise continues without user.
+ * Use for public routes where knowing the viewer identity is helpful but not required.
+ */
+export const optionalAuth = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) return next();
+
+    const token = authHeader.split(" ")[1];
+    const storedToken = await AuthToken.findOne({ token });
+    if (!storedToken) return next();
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "dummysecret");
+    const user = await User.findById(decoded.userId).select("-password");
+    if (user && user.status !== "banned") req.user = user;
+  } catch {
+    // ignore — proceed as unauthenticated
+  }
+  next();
+};

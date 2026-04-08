@@ -9,8 +9,11 @@ import {
   saveUserJson,
   type StoredUser,
 } from "@/features/auth/utils/storage";
+import {
+  makeOnViewableItemsChanged,
+} from "@/features/social/videoVisibilityStore";
 
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   StyleSheet,
@@ -41,6 +44,8 @@ export default function SocialScreen() {
 
   const onEndReachedCalledDuringMomentum = useRef(false);
   const initialFeedLoaded = useRef(false);
+
+  const onViewableItemsChanged = useMemo(() => makeOnViewableItemsChanged(() => {}), []);
 
   const loadPage = useCallback(async (pageNum: number, append: boolean) => {
     const { posts: raw, pagination } = await fetchFeed(pageNum, 10);
@@ -187,6 +192,8 @@ export default function SocialScreen() {
           initialNumToRender={5}
           windowSize={7}
           removeClippedSubviews
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={{ itemVisiblePercentThreshold: 80 }}
         />
       )}
     </SafeAreaView>
@@ -201,15 +208,14 @@ function FeedHeader({ router, me }: { router: any; me: StoredUser | null }) {
 
   return (
     <View style={styles.headerContainer}>
-      <View style={styles.searchContainer}>
+      <TouchableOpacity 
+        style={styles.searchContainer} 
+        activeOpacity={0.8}
+        onPress={() => router.push("/search")}
+      >
         <Ionicons name="search" size={20} color="#777" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Tìm kiếm thông tin, địa điểm…"
-          placeholderTextColor="#999"
-          editable={false}
-        />
-      </View>
+        <Text style={styles.searchInput}>Tìm kiếm thông tin, địa điểm…</Text>
+      </TouchableOpacity>
 
       <View style={styles.createContainer}>
         <TouchableOpacity onPress={() => router.push("/profile")}>

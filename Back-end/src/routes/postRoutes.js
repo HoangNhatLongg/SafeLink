@@ -51,7 +51,7 @@ router.get("/nearby", getNearbyPosts);
 
 // Chi tiết, sửa, xóa
 router.get("/:id", getPostById);
-router.put("/:id", updatePost);
+router.put("/:id", uploadPostMiddleware, updatePost);
 router.delete("/:id", deletePost);
 
 // Phản ứng

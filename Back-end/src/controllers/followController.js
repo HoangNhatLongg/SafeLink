@@ -59,22 +59,38 @@ export const unfollowUser = async (req, res) => {
 export const getFollowers = async (req, res) => {
   try {
     const userId = req.params.id;
+    const currentUserId = req.user._id;
+    const search = req.query.search || "";
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, parseInt(req.query.limit) || 20);
     const skip = (page - 1) * limit;
 
+    if (userId !== currentUserId.toString()) {
+      const targetUser = await User.findById(userId).select("profile.privacy.showFollowers").lean();
+      if (targetUser?.profile?.privacy?.showFollowers === false) {
+        return res.status(403).json({ message: "Người dùng này không chia sẻ danh sách người theo dõi." });
+      }
+    }
+
+    const filter = { following: userId };
+    if (search.trim()) {
+      const matchedUsers = await User.find({
+        $or: [{ name: { $regex: search, $options: "i" } }, { email: { $regex: search, $options: "i" } }]
+      }).select("_id").lean();
+      filter.follower = { $in: matchedUsers.map(u => u._id) };
+    }
+
     const [follows, total] = await Promise.all([
-      Follow.find({ following: userId })
+      Follow.find(filter)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate("follower", "name email")
+        .populate("follower", "name email avatar")
         .lean(),
-      Follow.countDocuments({ following: userId }),
+      Follow.countDocuments(filter),
     ]);
 
     // Kiểm tra xem user hiện tại có follow ngược lại không
-    const currentUserId = req.user._id;
     const followerIds = follows.map((f) => f.follower._id.toString());
     const mutualFollows = await Follow.find({
       follower: currentUserId,
@@ -105,22 +121,38 @@ export const getFollowers = async (req, res) => {
 export const getFollowing = async (req, res) => {
   try {
     const userId = req.params.id;
+    const currentUserId = req.user._id;
+    const search = req.query.search || "";
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, parseInt(req.query.limit) || 20);
     const skip = (page - 1) * limit;
 
+    if (userId !== currentUserId.toString()) {
+      const targetUser = await User.findById(userId).select("profile.privacy.showFollowing").lean();
+      if (targetUser?.profile?.privacy?.showFollowing === false) {
+        return res.status(403).json({ message: "Người dùng này không chia sẻ danh sách đang theo dõi." });
+      }
+    }
+
+    const filter = { follower: userId };
+    if (search.trim()) {
+      const matchedUsers = await User.find({
+        $or: [{ name: { $regex: search, $options: "i" } }, { email: { $regex: search, $options: "i" } }]
+      }).select("_id").lean();
+      filter.following = { $in: matchedUsers.map(u => u._id) };
+    }
+
     const [follows, total] = await Promise.all([
-      Follow.find({ follower: userId })
+      Follow.find(filter)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate("following", "name email")
+        .populate("following", "name email avatar")
         .lean(),
-      Follow.countDocuments({ follower: userId }),
+      Follow.countDocuments(filter),
     ]);
 
     // Kiểm tra xem user hiện tại có follow những người đó không
-    const currentUserId = req.user._id;
     const followingIds = follows.map((f) => f.following._id.toString());
     const myFollows = await Follow.find({
       follower: currentUserId,

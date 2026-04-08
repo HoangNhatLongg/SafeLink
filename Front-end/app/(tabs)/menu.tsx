@@ -1,9 +1,12 @@
-import { getUserJson, type StoredUser } from "@/features/auth/utils/storage";
+import { getUserJson, clearSession, type StoredUser } from "@/features/auth/utils/storage";
 import { useRouter, useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+
+import { logoutApi } from "@/features/auth/services/authApi";
+import { Alert } from "react-native";
 
 export default function MenuTab() {
   const router = useRouter();
@@ -15,6 +18,22 @@ export default function MenuTab() {
     }, [])
   );
 
+  const logout = () =>
+    Alert.alert("Đăng xuất", "Bạn có chắc chắn muốn đăng xuất?", [
+      { text: "Hủy", style: "cancel" },
+      {
+        text: "Đăng xuất",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await logoutApi();
+          } catch {}
+          await clearSession();
+          router.replace("/login");
+        },
+      },
+    ]);
+
   return (
     <SafeAreaView style={styles.safe} edges={["bottom"]}>
       <ScrollView contentContainerStyle={styles.wrap}>
@@ -23,7 +42,7 @@ export default function MenuTab() {
 
         <MenuRow
           icon="person-circle-outline"
-          label="Hồ sơ & đăng xuất"
+          label="Hồ sơ"
           onPress={() => router.push("/profile")}
         />
         <MenuRow
@@ -35,6 +54,11 @@ export default function MenuTab() {
           icon="navigate-outline"
           label="Bài viết gần bạn (GPS)"
           onPress={() => router.push("/nearby")}
+        />
+        <MenuRow
+          icon="log-out-outline"
+          label="Đăng xuất"
+          onPress={logout}
         />
         {["moderator", "admin"].includes(me?.role || "") ? (
           <MenuRow
@@ -63,6 +87,7 @@ function MenuRow({
       <Text style={styles.rowLabel}>{label}</Text>
       <Ionicons name="chevron-forward" size={20} color="#ccc" />
     </TouchableOpacity>
+    
   );
 }
 

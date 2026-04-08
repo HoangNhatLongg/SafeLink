@@ -20,8 +20,13 @@ import {
 import { reverseGeocodeLabel } from "../services/geocodeService.js";
 
 // ─────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────
+
+const extractTags = (content) => {
+  if (!content) return [];
+  const matches = content.match(/#[a-zA-Z0-9_]+/g);
+  if (!matches) return [];
+  return [...new Set(matches.map((t) => t.toLowerCase()))];
+};
 
 /**
  * Xây dựng URL từ đường dẫn file được lưu
@@ -70,26 +75,26 @@ export const createPost = async (req, res) => {
         : NaN;
     const hasCoords = Number.isFinite(latNum) && Number.isFinite(lngNum);
 
+    // Build arrays from the single files array returned by multer.any()
+    const allFiles = req.files || [];
+    const images = allFiles
+      .filter((f) => f.mimetype.startsWith("image/"))
+      .map((f) => ({ url: buildMediaUrl(req, f.path), filename: f.filename }));
+    const videos = allFiles
+      .filter((f) => f.mimetype.startsWith("video/"))
+      .map((f) => ({ url: buildMediaUrl(req, f.path), filename: f.filename }));
+
+    const hasImages = images.length > 0;
+    const hasVideos = videos.length > 0;
+
     // Phải có ít nhất nội dung hoặc media
     const hasContent = content && content.trim().length > 0;
-    const hasImages = req.files?.images?.length > 0;
-    const hasVideos = req.files?.videos?.length > 0;
 
     if (!hasContent && !hasImages && !hasVideos) {
       return res
         .status(400)
         .json({ message: "Bài viết cần có nội dung hoặc ít nhất một ảnh/video." });
     }
-
-    // Xây dựng mảng media
-    const images = (req.files?.images || []).map((f) => ({
-      url: buildMediaUrl(req, f.path),
-      filename: f.filename,
-    }));
-    const videos = (req.files?.videos || []).map((f) => ({
-      url: buildMediaUrl(req, f.path),
-      filename: f.filename,
-    }));
 
     // Địa danh: ưu tiên address từ client; nếu không có thì reverse geocode (Nominatim)
     let resolvedAddress =
@@ -106,9 +111,12 @@ export const createPost = async (req, res) => {
         }
       : undefined;
 
+    const extractedTags = extractTags(content);
+
     const post = await Post.create({
       author: userId,
       content: content?.trim(),
+      tags: extractedTags,
       images,
       videos,
       location,
@@ -130,7 +138,7 @@ export const createPost = async (req, res) => {
       }
     }
 
-    await post.populate("author", "name email");
+    await post.populate("author", "name email avatar");
 
     return res.status(201).json({
       message: "Đăng bài thành công.",
@@ -142,11 +150,7 @@ export const createPost = async (req, res) => {
   }
 };
 
-/**
- * GET /api/posts
- * Feed bài viết (mới nhất, bỏ qua bài đã ẩn)
- * Query: ?page=1&limit=10&authorId=xxx
- */
+
 export const getFeed = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -175,7 +179,7 @@ export const getFeed = async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate("author", "name email")
+        .populate("author", "name email avatar")
         .lean(),
       Post.countDocuments(filter),
     ]);
@@ -237,7 +241,7 @@ export const getPostById = async (req, res) => {
       status: "active",
       hiddenBy: { $nin: [userId] },
     })
-      .populate("author", "name email")
+      .populate("author", "name email avatar")
       .lean();
 
     if (!post) {
@@ -284,13 +288,81 @@ export const updatePost = async (req, res) => {
       return res.status(403).json({ message: "Bạn không có quyền chỉnh sửa bài viết này." });
     }
 
-    const { content, visibility } = req.body;
+    const { content, visibility, latitude, longitude, address, retainedMedia } = req.body;
 
-    if (content !== undefined) post.content = content.trim();
+    if (content !== undefined) {
+      post.content = content.trim();
+      post.tags = extractTags(post.content);
+    }
     if (visibility) post.visibility = visibility;
 
+    // Lọc media giữ lại
+    let parsedRetained = [];
+    try {
+      if (retainedMedia) parsedRetained = JSON.parse(retainedMedia);
+    } catch (e) {
+      console.warn("Invalid retainedMedia format", e.message);
+    }
+
+    const oldImages = post.images.filter((img) => parsedRetained.includes(img.url));
+    const oldVideos = post.videos.filter((vid) => parsedRetained.includes(vid.url));
+
+    const allFiles = req.files || [];
+    const newImages = allFiles
+      .filter((f) => f.mimetype.startsWith("image/"))
+      .map((f) => ({ url: buildMediaUrl(req, f.path), filename: f.filename }));
+    const newVideos = allFiles
+      .filter((f) => f.mimetype.startsWith("video/"))
+      .map((f) => ({ url: buildMediaUrl(req, f.path), filename: f.filename }));
+
+    post.images = [...oldImages, ...newImages];
+    post.videos = [...oldVideos, ...newVideos];
+
+    const hasContent = post.content && post.content.length > 0;
+    const hasMedia = post.images.length > 0 || post.videos.length > 0;
+
+    if (!hasContent && !hasMedia) {
+      return res.status(400).json({ message: "Bài viết cần có nội dung hoặc ít nhất một ảnh/video." });
+    }
+
+    // Xử lý Location
+    const latNum =
+      latitude !== undefined && latitude !== null && latitude !== ""
+        ? parseFloat(latitude)
+        : NaN;
+    const lngNum =
+      longitude !== undefined && longitude !== null && longitude !== ""
+        ? parseFloat(longitude)
+        : NaN;
+    const hasCoords = Number.isFinite(latNum) && Number.isFinite(lngNum);
+
+    if (hasCoords) {
+      let resolvedAddress =
+        typeof address === "string" && address.trim() ? address.trim() : null;
+      if (!resolvedAddress) resolvedAddress = await reverseGeocodeLabel(latNum, lngNum);
+      
+      post.location = { latitude: latNum, longitude: lngNum, address: resolvedAddress || null };
+      
+      try {
+        await savePostLocation(
+          post._id.toString(),
+          userId.toString(),
+          latNum,
+          lngNum,
+          resolvedAddress || null
+        );
+      } catch (geoErr) {
+        console.warn("savePostLocation update skipped:", geoErr.message);
+      }
+    } else {
+      post.location = undefined;
+      try {
+        await deletePostLocation(post._id.toString());
+      } catch (err) {}
+    }
+
     await post.save();
-    await post.populate("author", "name email");
+    await post.populate("author", "name email avatar");
 
     return res.json({ message: "Cập nhật bài viết thành công.", post });
   } catch (err) {
@@ -483,6 +555,7 @@ export const toggleHidePost = async (req, res) => {
 export const sharePost = async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user._id; // ← fix: khai báo userId
     const visible = await findActivePostVisibleToUser(id, userId);
     if (!visible) return res.status(404).json({ message: "Không tìm thấy bài viết." });
 
@@ -584,7 +657,7 @@ export const getNearbyPosts = async (req, res) => {
       hiddenBy: { $nin: [userId] },
       $and: [vis],
     })
-      .populate("author", "name email")
+      .populate("author", "name email avatar")
       .lean();
 
     const postById = Object.fromEntries(postsRaw.map((p) => [p._id.toString(), p]));
@@ -646,7 +719,7 @@ export const getSavedPosts = async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate("author", "name email")
+        .populate("author", "name email avatar")
         .lean(),
       Post.countDocuments({ savedBy: userId, status: "active" }),
     ]);

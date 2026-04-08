@@ -13,6 +13,11 @@ const postSchema = new mongoose.Schema(
       type: String,
       maxlength: 5000,
     },
+    
+    // Hashtags
+    tags: [
+      { type: String, index: true }
+    ],
 
     // Media đính kèm
     images: [
