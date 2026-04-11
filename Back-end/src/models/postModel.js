@@ -22,14 +22,27 @@ const postSchema = new mongoose.Schema(
     // Media đính kèm
     images: [
       {
-        url: { type: String, required: true },
-        filename: String,
+        url:       { type: String, required: true }, // URL gốc / large (hoặc local fallback)
+        // Cloudinary multi-size (undefined nếu dùng local storage)
+        thumbnail: { type: String }, // ~150x150 — dùng cho grid/avatar
+        medium:    { type: String }, // ~600px   — dùng trong feed
+        large:     { type: String }, // ~1200px  — dùng khi xem chi tiết
+        publicId:  { type: String }, // Cloudinary public_id để xóa sau này
+        filename:  { type: String }, // filename gốc (local fallback)
+        width:     { type: Number },
+        height:    { type: Number },
+        format:    { type: String, default: "webp" },
       },
     ],
     videos: [
       {
-        url: { type: String, required: true },
-        filename: String,
+        url:       { type: String, required: true },
+        thumbnail: { type: String }, // Ảnh đại diện video
+        publicId:  { type: String }, // Cloudinary public_id
+        filename:  { type: String },
+        duration:  { type: Number }, // giây
+        width:     { type: Number },
+        height:    { type: Number },
       },
     ],
 
@@ -45,6 +58,49 @@ const postSchema = new mongoose.Schema(
       type: String,
       enum: ["public", "friends", "private"],
       default: "public",
+    },
+
+    // Loại bài viết (SOS, bình thường)
+    postType: {
+      type: String,
+      enum: ["normal", "sos"],
+      default: "normal",
+      index: true,
+    },
+
+    // ===== SOS-specific fields =====
+    // Danh mục khẩn cấp
+    sosCategory: {
+      type: String,
+      enum: ["fire", "landslide", "traffic", "robbery", "medical", "flood", "other"],
+      default: null,
+    },
+
+    // Bán kính cảnh báo (mét)
+    sosRadius: {
+      type: Number,
+      default: 1000, // 1km mặc định
+    },
+
+    // Trạng thái SOS
+    sosStatus: {
+      type: String,
+      enum: ["active", "resolved", "expired"],
+      default: "active",
+      index: true,
+    },
+
+    // Ai resolve SOS này
+    sosResolvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    // Thời gian hết hạn của SOS (24h sau khi tạo)
+    sosExpiresAt: {
+      type: Date,
+      default: null,
     },
 
     // ===== Thống kê (denormalized để query nhanh) =====
@@ -93,6 +149,8 @@ postSchema.index({ status: 1, createdAt: -1 });
 postSchema.index({ status: 1, score: -1 });
 // Lấy bài của 1 user
 postSchema.index({ author: 1, status: 1, createdAt: -1 });
+// Hỗ trợ truy vấn feed theo loại bài viết
+postSchema.index({ postType: 1, status: 1, createdAt: -1 });
 
 const Post = mongoose.model("Post", postSchema);
 export default Post;

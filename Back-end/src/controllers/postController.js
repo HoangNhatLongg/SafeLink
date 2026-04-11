@@ -18,6 +18,14 @@ import {
   findActivePostVisibleToUser,
 } from "../utils/postVisibility.js";
 import { reverseGeocodeLabel } from "../services/geocodeService.js";
+import {
+  uploadImageToCloudinary,
+  uploadVideoToCloudinary,
+  deleteFromCloudinary,
+  buildLocalMediaUrl,
+  isCloudinaryConfigured,
+} from "../middleware/upload.js";
+import { withCache, cacheDelPattern } from "../utils/cache.js";
 
 // ─────────────────────────────────────────────
 
@@ -62,7 +70,7 @@ const getUserReaction = async (userId, postId) => {
  */
 export const createPost = async (req, res) => {
   try {
-    const { content, visibility, latitude, longitude, address } = req.body;
+    const { content, visibility, latitude, longitude, address, postType } = req.body;
     const userId = req.user._id;
 
     const latNum =
@@ -77,12 +85,33 @@ export const createPost = async (req, res) => {
 
     // Build arrays from the single files array returned by multer.any()
     const allFiles = req.files || [];
-    const images = allFiles
-      .filter((f) => f.mimetype.startsWith("image/"))
-      .map((f) => ({ url: buildMediaUrl(req, f.path), filename: f.filename }));
-    const videos = allFiles
-      .filter((f) => f.mimetype.startsWith("video/"))
-      .map((f) => ({ url: buildMediaUrl(req, f.path), filename: f.filename }));
+    const imageFiles = allFiles.filter((f) => f.mimetype.startsWith("image/"));
+    const videoFiles = allFiles.filter((f) => f.mimetype.startsWith("video/"));
+
+    // Upload lên Cloudinary (nếu đã cấu hình) hoặc dùng local URL
+    let images, videos;
+    if (isCloudinaryConfigured && (imageFiles.length || videoFiles.length)) {
+      const [imgUploads, vidUploads] = await Promise.all([
+        Promise.all(imageFiles.map((f) =>
+          uploadImageToCloudinary(f.buffer, `posts/${userId}`)
+        )),
+        Promise.all(videoFiles.map((f) =>
+          uploadVideoToCloudinary(f.buffer, `posts/${userId}/videos`)
+        )),
+      ]);
+      images = imgUploads;
+      videos = vidUploads;
+    } else {
+      // Local fallback — giữ nguyên hành vi cũ
+      images = imageFiles.map((f) => ({
+        url: buildLocalMediaUrl(req, f.path),
+        filename: f.filename,
+      }));
+      videos = videoFiles.map((f) => ({
+        url: buildLocalMediaUrl(req, f.path),
+        filename: f.filename,
+      }));
+    }
 
     const hasImages = images.length > 0;
     const hasVideos = videos.length > 0;
@@ -113,6 +142,13 @@ export const createPost = async (req, res) => {
 
     const extractedTags = extractTags(content);
 
+    // Xác định loại bài và thời hạn SOS
+    const resolvedPostType = postType === "sos" ? "sos" : "normal";
+    const sosExpiresAt =
+      resolvedPostType === "sos"
+        ? new Date(Date.now() + 24 * 60 * 60 * 1000) // +24h
+        : null;
+
     const post = await Post.create({
       author: userId,
       content: content?.trim(),
@@ -121,6 +157,8 @@ export const createPost = async (req, res) => {
       videos,
       location,
       visibility: visibility || "public",
+      postType: resolvedPostType,
+      sosExpiresAt,
     });
 
     // Lưu vị trí vào PostgreSQL nếu có GPS (không làm hỏng bài nếu PG chưa cấu hình / lỗi)
@@ -140,6 +178,10 @@ export const createPost = async (req, res) => {
 
     await post.populate("author", "name email avatar");
 
+    // Xóa cache feed sau khi đăng bài mới
+    cacheDelPattern("feed:");
+    cacheDelPattern("recommended:");
+
     return res.status(201).json({
       message: "Đăng bài thành công.",
       post,
@@ -158,69 +200,79 @@ export const getFeed = async (req, res) => {
     const limit = Math.min(50, parseInt(req.query.limit) || 10);
     const skip = (page - 1) * limit;
 
-    const friendAuthorIds = await getFriendAuthorIds(userId);
+    // Cache key theo user + page (feed riêng mỗi user, TTL 30 giây)
+    // Không cache khi filter theo authorId (profile view)
+    const canCache = !req.query.authorId;
+    const cacheKey = `feed:${userId}:p${page}:l${limit}`;
 
-    const filter = {
-      status: "active",
-      hiddenBy: { $nin: [userId] },
-    };
+    const result = await withCache(cacheKey, canCache ? 30 : 0, async () => {
+      const friendAuthorIds = await getFriendAuthorIds(userId);
 
-    if (req.query.authorId) {
-      const aid = req.query.authorId;
-      filter.author = aid;
-      const profileVis = authorProfileVisibilityMatch(aid, userId.toString(), friendAuthorIds);
-      if (profileVis) filter.$and = [profileVis];
-    } else {
-      filter.$and = [feedVisibilityMatch(userId, friendAuthorIds)];
-    }
+      const filter = {
+        status: "active",
+        hiddenBy: { $nin: [userId] },
+      };
 
-    const [posts, total] = await Promise.all([
-      Post.find(filter)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .populate("author", "name email avatar")
-        .lean(),
-      Post.countDocuments(filter),
-    ]);
+      if (req.query.authorId) {
+        const aid = req.query.authorId;
+        filter.author = aid;
+        const profileVis = authorProfileVisibilityMatch(aid, userId.toString(), friendAuthorIds);
+        if (profileVis) filter.$and = [profileVis];
+      } else {
+        filter.$and = [feedVisibilityMatch(userId, friendAuthorIds)];
+      }
 
-    // Gắn vị trí từ PostgreSQL
-    const postIds = posts.map((p) => p._id.toString());
-    const locationMap = await getPostLocations(postIds);
+      const [posts, total] = await Promise.all([
+        Post.find(filter)
+          .sort({ postType: -1, createdAt: -1 }) // SOS trước, sau đó đến Normal
+          .skip(skip)
+          .limit(limit)
+          // Chỉ lấy fields cần thiết
+          .select("author content tags images videos location likesCount dislikesCount score commentsCount sharesCount savedBy postType visibility status createdAt")
+          .populate("author", "name email avatar")
+          .lean(),
+        Post.countDocuments(filter),
+      ]);
 
-    // Gắn reaction của user hiện tại
-    const userReactions = await Like.find({
-      user: userId,
-      target: { $in: postIds },
-      targetType: "Post",
-    }).lean();
-    const reactionMap = userReactions.reduce((acc, r) => {
-      acc[r.target.toString()] = r.type;
-      return acc;
-    }, {});
+      const postIds = posts.map((p) => p._id.toString());
+      const locationMap = await getPostLocations(postIds);
 
-    // Gắn isSaved của user
-    const savedPostIds = new Set(
-      posts.filter((p) => p.savedBy?.some((id) => id.toString() === userId.toString())).map((p) => p._id.toString())
-    );
+      const userReactions = await Like.find({
+        user: userId,
+        target: { $in: postIds },
+        targetType: "Post",
+      }).lean();
+      const reactionMap = userReactions.reduce((acc, r) => {
+        acc[r.target.toString()] = r.type;
+        return acc;
+      }, {});
 
-    const enrichedPosts = posts.map((post) => ({
-      ...post,
-      location: locationMap[post._id.toString()] || post.location,
-      userReaction: reactionMap[post._id.toString()] || null,
-      isSaved: savedPostIds.has(post._id.toString()),
-    }));
+      const savedPostIds = new Set(
+        posts.filter((p) => p.savedBy?.some((id) => id.toString() === userId.toString())).map((p) => p._id.toString())
+      );
 
-    return res.json({
-      posts: enrichedPosts,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-        hasMore: skip + posts.length < total,
-      },
+      const enrichedPosts = posts.map((post) => ({
+        ...post,
+        location: locationMap[post._id.toString()] || post.location,
+        userReaction: reactionMap[post._id.toString()] || null,
+        isSaved: savedPostIds.has(post._id.toString()),
+      }));
+
+      return {
+        posts: enrichedPosts,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+          hasMore: skip + posts.length < total,
+        },
+      };
     });
+
+    // Cache-Control cho client và CDN (feed thay đổi nhanh → ngắn)
+    res.set("Cache-Control", "private, max-age=15, stale-while-revalidate=30");
+    return res.json(result);
   } catch (err) {
     console.error("getFeed error:", err);
     return res.status(500).json({ message: "Lỗi server.", error: err.message });
@@ -397,6 +449,21 @@ export const deletePost = async (req, res) => {
 
     // Xóa GIS data
     await deletePostLocation(id);
+
+    // Xóa ảnh/video trên Cloudinary (background, không block response)
+    if (isCloudinaryConfigured) {
+      const allMedia = [
+        ...post.images.filter((img) => img.publicId).map((img) => ({ id: img.publicId, type: "image" })),
+        ...post.videos.filter((vid) => vid.publicId).map((vid) => ({ id: vid.publicId, type: "video" })),
+      ];
+      Promise.all(allMedia.map((m) => deleteFromCloudinary(m.id, m.type))).catch(
+        (e) => console.warn("Cloudinary cleanup warning:", e.message)
+      );
+    }
+
+    // Xóa cache liên quan
+    cacheDelPattern("feed:");
+    cacheDelPattern("recommended:");
 
     return res.json({ message: "Đã xóa bài viết." });
   } catch (err) {
@@ -733,3 +800,259 @@ export const getSavedPosts = async (req, res) => {
     return res.status(500).json({ message: "Lỗi server.", error: err.message });
   }
 };
+
+// ─────────────────────────────────────────────
+// Thuật Toán Đề Xuất Bài Viết
+// ─────────────────────────────────────────────
+
+/**
+ * Hàm tiện ích: enrich danh sách posts với location, userReaction, isSaved
+ */
+const enrichPosts = async (posts, userId, locationMap = {}, reactionMap = {}, savedSet = new Set()) => {
+  return posts.map((post) => ({
+    ...post,
+    location: locationMap[post._id.toString()] || post.location,
+    userReaction: reactionMap[post._id.toString()] || null,
+    isSaved: savedSet.has(post._id.toString()),
+  }));
+};
+
+/**
+ * GET /api/posts/recommended
+ * Thuật toán đề xuất bài viết theo 5 tầng ưu tiên:
+ *   Tầng 1: SOS    — bài cảnh báo khẩn (postType=sos, còn hạn 24h)
+ *   Tầng 2: Bạn bè  — tác giả mutual-follow, mới nhất (~40% slot)
+ *   Tầng 3: Gần    — trong bán kính 10km (~20% slot, cần gửi lat+lng)
+ *   Tầng 4: Nổi bật — score cao nhất chưa xuất hiện (~20% slot)
+ *   Tầng 5: Còn lại — fill nốt slot trống, mới nhất
+ *
+ * Query params:
+ *   page   (default: 1)  — chỉ áp dụng cho tầng 5
+ *   limit  (default: 20) — tổng số bài trả về
+ *   lat    (optional)    — vĩ độ user (bật tầng 3)
+ *   lng    (optional)    — kinh độ user (bật tầng 3)
+ *   radius (optional, default: 10000m)
+ */
+export const getRecommendedFeed = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const userIdStr = userId.toString();
+
+    const limit = Math.min(50, parseInt(req.query.limit) || 20);
+    const page  = Math.max(1, parseInt(req.query.page) || 1);
+    const lat   = parseFloat(req.query.lat);
+    const lng   = parseFloat(req.query.lng);
+    const radius = Math.min(parseInt(req.query.radius) || 10000, 50000); // default 10km
+    const hasGPS = Number.isFinite(lat) && Number.isFinite(lng);
+
+    const now = new Date();
+
+    // Tính số slot cho mỗi tầng
+    const friendSlots  = Math.round(limit * 0.40); // 40%
+    const nearbySlots  = Math.round(limit * 0.20); // 20%
+    const topSlots     = Math.round(limit * 0.20); // 20%
+    // SOS không giới hạn slot — luôn ưu tiên tuyệt đối
+
+    // ─ Context ───────────────────────────────────────────
+    const [friendAuthorIds, nearbyRows] = await Promise.all([
+      getFriendAuthorIds(userId),
+      hasGPS && process.env.POSTGRES_URI
+        ? findNearbyPostIds(lat, lng, radius, nearbySlots * 3).catch((e) => {
+            console.warn("findNearbyPostIds skipped:", e.message);
+            return [];
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const visFilter = feedVisibilityMatch(userId, friendAuthorIds);
+    const baseFilter = {
+      status: "active",
+      hiddenBy: { $nin: [userId] },
+      $and: [visFilter],
+    };
+
+    // ID bài viết đã đưa vào kết quả (để loại trậng lấp)
+    const seenIds = new Set();
+    const addToSeen = (posts) => posts.forEach((p) => seenIds.add(p._id.toString()));
+
+    // ─ Tầng 1: SOS ────────────────────────────────────
+    const sosPosts = await Post.find({
+      ...baseFilter,
+      postType: "sos",
+      $and: [
+        visFilter,
+        {
+          $or: [
+            { sosExpiresAt: null },
+            { sosExpiresAt: { $gt: now } },
+          ],
+        },
+      ],
+    })
+      .sort({ createdAt: -1 })
+      .populate("author", "name email avatar")
+      .lean();
+    addToSeen(sosPosts);
+
+    // ─ Tầng 2: Bạn bè ───────────────────────────────
+    const friendPosts = friendAuthorIds.length > 0
+      ? await Post.find({
+          ...baseFilter,
+          author: { $in: friendAuthorIds },
+          _id: { $nin: [...seenIds] },
+          $and: [visFilter],
+        })
+          .sort({ createdAt: -1 })
+          .limit(friendSlots)
+          .populate("author", "name email avatar")
+          .lean()
+      : [];
+    addToSeen(friendPosts);
+
+    // ─ Tầng 3: Gần vị trí (PostGIS) ─────────────────
+    let nearbyPosts = [];
+    const nearbyLocationMap = {};
+    if (nearbyRows.length > 0) {
+      const nearbyIds = nearbyRows
+        .map((r) => r.post_id)
+        .filter((id) => !seenIds.has(id));
+
+      if (nearbyIds.length > 0) {
+        const nearbyRaw = await Post.find({
+          ...baseFilter,
+          _id: { $in: nearbyIds },
+          $and: [visFilter],
+        })
+          .populate("author", "name email avatar")
+          .lean();
+
+        // Sắp xếp theo thứ tự khoảng cách từ PostGIS
+        const orderMap = Object.fromEntries(nearbyIds.map((id, i) => [id, i]));
+        nearbyPosts = nearbyRaw
+          .sort((a, b) => (orderMap[a._id.toString()] ?? 999) - (orderMap[b._id.toString()] ?? 999))
+          .slice(0, nearbySlots);
+
+        // Lưu location data để enrich sau
+        nearbyRows.forEach((r) => { nearbyLocationMap[r.post_id] = r; });
+      }
+    }
+    addToSeen(nearbyPosts);
+
+    // ─ Tầng 4: Điểm cao (score) ───────────────────
+    const topPosts = await Post.find({
+      ...baseFilter,
+      _id: { $nin: [...seenIds] },
+      score: { $gt: 0 },
+      $and: [visFilter],
+    })
+      .sort({ score: -1, createdAt: -1 })
+      .limit(topSlots)
+      .populate("author", "name email avatar")
+      .lean();
+    addToSeen(topPosts);
+
+    // ─ Tầng 5: Còn lại (pagination) ──────────────
+    const usedSlots = sosPosts.length + friendPosts.length + nearbyPosts.length + topPosts.length;
+    const remainingSlots = Math.max(0, limit - usedSlots);
+    const remainingSkip  = (page - 1) * remainingSlots;
+
+    let remainingPosts = [];
+    let remainingTotal = 0;
+
+    if (remainingSlots > 0) {
+      const remainingFilter = {
+        ...baseFilter,
+        _id: { $nin: [...seenIds] },
+        $and: [visFilter],
+      };
+      [remainingPosts, remainingTotal] = await Promise.all([
+        Post.find(remainingFilter)
+          .sort({ createdAt: -1 })
+          .skip(remainingSkip)
+          .limit(remainingSlots)
+          .populate("author", "name email avatar")
+          .lean(),
+        Post.countDocuments(remainingFilter),
+      ]);
+    }
+
+    // ─ Merge kết quả ───────────────────────────────
+    const allPosts = [
+      ...sosPosts,
+      ...friendPosts,
+      ...nearbyPosts,
+      ...topPosts,
+      ...remainingPosts,
+    ];
+
+    // Thu thập IDs để batch-query
+    const allIds = allPosts.map((p) => p._id.toString());
+
+    // Location map (MongoDB fallback + PostGIS nearby)
+    const pgLocationMap = await getPostLocations(allIds);
+    const locationMap = { ...pgLocationMap, ...nearbyLocationMap };
+
+    // Reaction map
+    const userReactions = await Like.find({
+      user: userId,
+      target: { $in: allIds },
+      targetType: "Post",
+    }).lean();
+    const reactionMap = userReactions.reduce((acc, r) => {
+      acc[r.target.toString()] = r.type;
+      return acc;
+    }, {});
+
+    // Saved set
+    const savedSet = new Set(
+      allPosts
+        .filter((p) => p.savedBy?.some((id) => id.toString() === userIdStr))
+        .map((p) => p._id.toString())
+    );
+
+    // Enrich và thêm metadata tầng
+    const tagPost = (post, tier, extra = {}) => ({
+      ...post,
+      location: locationMap[post._id.toString()] || post.location,
+      userReaction: reactionMap[post._id.toString()] || null,
+      isSaved: savedSet.has(post._id.toString()),
+      _tier: tier,
+      ...extra,
+    });
+
+    const enrichedPosts = [
+      ...sosPosts.map((p) => tagPost(p, "sos")),
+      ...friendPosts.map((p) => tagPost(p, "friends")),
+      ...nearbyPosts.map((p) =>
+        tagPost(p, "nearby", {
+          distanceM: nearbyLocationMap[p._id.toString()]?.distance_m,
+        })
+      ),
+      ...topPosts.map((p) => tagPost(p, "top")),
+      ...remainingPosts.map((p) => tagPost(p, "remaining")),
+    ];
+
+    return res.json({
+      posts: enrichedPosts,
+      pagination: {
+        page,
+        limit,
+        total: usedSlots + remainingTotal,
+        hasMore: remainingSkip + remainingPosts.length < remainingTotal,
+      },
+      meta: {
+        tiers: {
+          sos: sosPosts.length,
+          friends: friendPosts.length,
+          nearby: nearbyPosts.length,
+          top: topPosts.length,
+          remaining: remainingPosts.length,
+        },
+      },
+    });
+  } catch (err) {
+    console.error("getRecommendedFeed error:", err);
+    return res.status(500).json({ message: "Lỗi server.", error: err.message });
+  }
+};
+

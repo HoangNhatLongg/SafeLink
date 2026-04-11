@@ -19,12 +19,23 @@ const commentSchema = new mongoose.Schema(
       maxlength: 2000,
     },
 
-    // null = bình luận gốc; ref = bình luận con
+    // null = bình luận gốc; có giá trị = bình luận con (luôn trỏ về root comment)
     parentComment: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Comment",
       default: null,
       index: true,
+    },
+
+    /**
+     * Người được tag khi reply (bình luận cùng cấp).
+     * Tất cả replies đều cùng parentComment = root, nhưng replyTo
+     * chỉ ra user nào đang được trả lời cụ thể trong luồng.
+     */
+    replyTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
     },
 
     // Thống kê phản ứng bình luận

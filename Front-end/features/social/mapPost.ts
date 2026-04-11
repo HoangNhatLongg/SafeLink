@@ -1,3 +1,5 @@
+import { PostImage } from "./CachedImage";
+
 export type FeedPostUi = {
   id: string;
   authorId?: string;
@@ -9,8 +11,9 @@ export type FeedPostUi = {
   title: string;
   hashtag: string;
   content: string;
-  images?: string[];
-  video?: string;
+  /** Multi-size image objects (Cloudinary) hoặc URL string (local) */
+  images?: PostImage[];
+  video?: { url: string; thumbnail?: string };
   likes: number;
   dislikes: number;
   commentsCount: number;
@@ -18,6 +21,7 @@ export type FeedPostUi = {
   userReaction: "like" | "dislike" | null;
   isSaved: boolean;
   visibility?: string;
+  postType?: "normal" | "sos";
 };
 
 function formatRelative(iso?: string): string {
@@ -38,7 +42,7 @@ export function mapApiPostToUi(p: any): FeedPostUi {
   const author = p.author || {};
   const name = author.name || author.email || "Người dùng";
   const avatar =
-    typeof author.avatar === "string" && author.avatar.trim()
+    typeof author.avatar === "string" && author.avatar.startsWith("http")
       ? author.avatar
       : PLACEHOLDER_AVATAR;
 
@@ -55,9 +59,28 @@ export function mapApiPostToUi(p: any): FeedPostUi {
     }
   }
 
-  const images = (p.images || []).map((x: any) => (typeof x === "string" ? x : x.url)).filter(Boolean);
-  const videos = p.videos || [];
-  const video = videos[0] ? (typeof videos[0] === "string" ? videos[0] : videos[0].url) : undefined;
+  // Map images — hỗ trợ cả multi-size (Cloudinary) và URL string (local)
+  const images: PostImage[] = (p.images || [])
+    .map((x: any): PostImage | null => {
+      if (!x) return null;
+      if (typeof x === "string") return { url: x };
+      return {
+        url:       x.url       || "",
+        thumbnail: x.thumbnail,
+        medium:    x.medium,
+        large:     x.large,
+      };
+    })
+    .filter((x: PostImage | null): x is PostImage => !!x?.url);
+
+  // Map videos
+  const firstVideo = (p.videos || [])[0];
+  const video = firstVideo
+    ? {
+        url: typeof firstVideo === "string" ? firstVideo : (firstVideo.url || ""),
+        thumbnail: typeof firstVideo === "object" ? firstVideo.thumbnail : undefined,
+      }
+    : undefined;
 
   return {
     id: String(p._id || p.id),
@@ -79,5 +102,6 @@ export function mapApiPostToUi(p: any): FeedPostUi {
     userReaction: p.userReaction ?? null,
     isSaved: !!p.isSaved,
     visibility: p.visibility,
+    postType: p.postType,
   };
 }

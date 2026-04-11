@@ -12,13 +12,15 @@ import {
 import {
   makeOnViewableItemsChanged,
 } from "@/features/social/videoVisibilityStore";
+import { Image as ExpoImage } from "expo-image";
+import { FlashList } from "@shopify/flash-list";
+import SOSButton from "@/features/SOS/SOSButton";
+import SOSModal from "@/features/SOS/SOSModal";
 
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
-  FlatList,
   StyleSheet,
   View,
-  Image,
   Text,
   TextInput,
   TouchableOpacity,
@@ -41,6 +43,7 @@ export default function SocialScreen() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [me, setMe] = useState<StoredUser | null>(null);
+  const [sosVisible, setSosVisible] = useState(false);
 
   const onEndReachedCalledDuringMomentum = useRef(false);
   const initialFeedLoaded = useRef(false);
@@ -165,10 +168,11 @@ export default function SocialScreen() {
           <Text style={styles.hint}>Đang tải bảng tin…</Text>
         </View>
       ) : (
-        <FlatList
+        <FlashList
           data={posts}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
+          estimatedItemSize={420}
           ListHeaderComponent={<FeedHeader router={router} me={me} />}
           ListEmptyComponent={
             <Text style={styles.empty}>Chưa có bài viết. Hãy là người đầu tiên đăng!</Text>
@@ -185,17 +189,20 @@ export default function SocialScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           onEndReached={loadMore}
-          onEndReachedThreshold={0.25}
-          onMomentumScrollBegin={() => {
-            onEndReachedCalledDuringMomentum.current = false;
-          }}
-          initialNumToRender={5}
-          windowSize={7}
-          removeClippedSubviews
-          onViewableItemsChanged={onViewableItemsChanged}
-          viewabilityConfig={{ itemVisiblePercentThreshold: 80 }}
         />
       )}
+
+      {/* Nút SOS nổi (có thể kéo thả) */}
+      <SOSButton onPress={() => setSosVisible(true)} />
+
+      {/* Modal gửi SOS */}
+      <SOSModal 
+        visible={sosVisible} 
+        onClose={() => setSosVisible(false)}
+        onSuccess={() => {
+          onRefresh(); // Làm mới feed để xem SOS mới
+        }} 
+      />
     </SafeAreaView>
   );
 }
@@ -219,7 +226,13 @@ function FeedHeader({ router, me }: { router: any; me: StoredUser | null }) {
 
       <View style={styles.createContainer}>
         <TouchableOpacity onPress={() => router.push("/profile")}>
-          <Image source={avatarSource} style={styles.avatar} />
+          <ExpoImage
+            source={avatarSource}
+            style={styles.avatar}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={150}
+          />
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.fakeInput}

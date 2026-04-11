@@ -1,7 +1,13 @@
 import User from '../models/userModel.js';
 import Follow from '../models/followModel.js';
 import Post from '../models/postModel.js';
-import { getMediaUrl } from '../middleware/upload.js';
+import {
+  getMediaUrl,
+  uploadImageToCloudinary,
+  buildLocalMediaUrl,
+  isCloudinaryConfigured,
+} from '../middleware/upload.js';
+import { cacheDelPattern } from '../utils/cache.js';
 
 /* ─────────────────────────────────────────────────────────────
    Helper: serialize profile with privacy rules
@@ -65,12 +71,27 @@ export const updateAvatar = async (req, res) => {
       return res.status(400).json({ message: "Vui lòng chọn ảnh đại diện." });
     }
 
-    const newUrl = getMediaUrl(req, req.file.path);
+    let newUrl;
+    if (isCloudinaryConfigured && req.file.buffer) {
+      // Upload lên Cloudinary: tạo 2 size cho avatar
+      //   thumbnail (200x200) → dùng trong comment, feed
+      //   medium (400x400)   → dùng trong profile
+      const result = await uploadImageToCloudinary(req.file.buffer, 'avatars');
+      // Ghi đè URL bằng nhỏ hơn (400px crop square) cho avatar
+      newUrl = result.medium || result.url;
+    } else {
+      // Local fallback
+      newUrl = getMediaUrl(req, req.file.path);
+    }
+
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ message: "Không tìm thấy người dùng." });
 
     user.avatar = newUrl;
     await user.save();
+
+    // Xóa cache user-related
+    cacheDelPattern(`feed:`);
 
     return res.json({
       message: "Cập nhật ảnh đại diện thành công.",
@@ -84,6 +105,7 @@ export const updateAvatar = async (req, res) => {
       }
     });
   } catch (err) {
+    console.error('updateAvatar error:', err);
     return res.status(500).json({ message: err.message });
   }
 };
@@ -98,7 +120,15 @@ export const updateCover = async (req, res) => {
       return res.status(400).json({ message: "Vui lòng chọn ảnh bìa." });
     }
 
-    const newUrl = getMediaUrl(req, req.file.path);
+    let newUrl;
+    if (isCloudinaryConfigured && req.file.buffer) {
+      // Cover: 1200px wide là đủ đẹp trên cả desktop
+      const result = await uploadImageToCloudinary(req.file.buffer, 'covers');
+      newUrl = result.large || result.medium || result.url;
+    } else {
+      newUrl = getMediaUrl(req, req.file.path);
+    }
+
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ message: "Không tìm thấy người dùng." });
 
@@ -118,6 +148,7 @@ export const updateCover = async (req, res) => {
       }
     });
   } catch (err) {
+    console.error('updateCover error:', err);
     return res.status(500).json({ message: err.message });
   }
 };

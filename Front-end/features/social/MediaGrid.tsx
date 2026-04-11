@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
+import { Image as ExpoImage } from "expo-image";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Dimensions,
   GestureResponderEvent,
-  Image,
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -50,29 +50,23 @@ interface SmartImageProps {
 
 function SmartImage({ uri, containerWidth, maxHeight, borderRadius }: SmartImageProps) {
   const [height, setHeight] = useState<number | null>(null);
-
-  const handleLoad = (e: { nativeEvent: { source: { width: number; height: number } } }) => {
-    const { width: natW, height: natH } = e.nativeEvent.source;
-    if (natW > 0 && natH > 0) {
-      const calculatedH = Math.min((containerWidth * natH) / natW, maxHeight);
-      setHeight(calculatedH);
-    }
-  };
-
   const displayHeight = height ?? Math.min(containerWidth, maxHeight);
 
   return (
-    <View style={{ width: containerWidth, height: displayHeight, borderRadius, overflow: "hidden" }}>
-      <Image
+    <View style={{ width: containerWidth, height: displayHeight, borderRadius, overflow: "hidden", backgroundColor: "#f1f5f9" }}>
+      <ExpoImage
         source={{ uri }}
-        style={{
-          width: containerWidth,
-          height: displayHeight,
-          borderRadius,
-          opacity: height ? 1 : 0.85,
+        style={{ width: containerWidth, height: displayHeight }}
+        contentFit="cover"
+        transition={200}
+        cachePolicy="memory-disk"
+        onLoad={(e) => {
+          const { width: natW, height: natH } = e.source;
+          if (natW > 0 && natH > 0) {
+            const calculatedH = Math.min((containerWidth * natH) / natW, maxHeight);
+            setHeight(calculatedH);
+          }
         }}
-        resizeMode="cover"
-        onLoad={handleLoad}
       />
     </View>
   );
@@ -93,13 +87,16 @@ function FixedCoverImage({
   onNaturalSize?: (w: number, h: number) => void;
 }) {
   return (
-    <View style={{ width, height, borderRadius, overflow: "hidden", backgroundColor: "#eceef2" }}>
-      <Image
+    <View style={{ width, height, borderRadius, overflow: "hidden", backgroundColor: "#f1f5f9" }}>
+      <ExpoImage
         source={{ uri }}
         style={{ width: "100%", height: "100%" }}
-        resizeMode="cover"
+        contentFit="cover"
+        transition={150}
+        cachePolicy="memory-disk"
+        recyclingKey={uri}
         onLoad={(e) => {
-          const { width: nw, height: nh } = e.nativeEvent.source;
+          const { width: nw, height: nh } = e.source;
           if (nw > 0 && nh > 0) onNaturalSize?.(nw, nh);
         }}
       />

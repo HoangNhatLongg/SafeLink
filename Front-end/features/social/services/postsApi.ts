@@ -15,6 +15,32 @@ export async function fetchFeed(page = 1, limit = 10, authorId?: string) {
   return parseJson<{ posts: any[]; pagination: Pagination }>(res);
 }
 
+/**
+ * Feed đề xuất theo 5 tầng ưu tiên:
+ * SOS → Bạn bè → Gần vị trí → Điểm cao → Còn lại
+ */
+export async function fetchRecommendedFeed(
+  page = 1,
+  limit = 20,
+  lat?: number,
+  lng?: number,
+  radius = 10000
+) {
+  const q = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (lat !== undefined && lng !== undefined) {
+    q.set("lat", String(lat));
+    q.set("lng", String(lng));
+    q.set("radius", String(radius));
+  }
+  const res = await apiFetch(`/api/posts/recommended?${q.toString()}`);
+  return parseJson<{
+    posts: any[];
+    pagination: Pagination & { hasMore: boolean };
+    meta: { tiers: { sos: number; friends: number; nearby: number; top: number; remaining: number } };
+  }>(res);
+}
+
+
 export async function fetchNearby(lat: number, lng: number, radius = 5000, limit = 20) {
   const q = new URLSearchParams({
     lat: String(lat),
@@ -115,12 +141,47 @@ export async function fetchComments(postId: string, page = 1, limit = 20) {
   return parseJson<{ comments: any[]; pagination: Pagination }>(res);
 }
 
-export async function addComment(postId: string, content: string) {
-  const res = await apiFetch(`/api/posts/${postId}/comments`, {
+export async function addComment(postId: string, content: string, parentId?: string, replyToUserId?: string) {
+  const endpoint = parentId
+    ? `/api/comments/${parentId}/replies`
+    : `/api/posts/${postId}/comments`;
+  const res = await apiFetch(endpoint, {
     method: "POST",
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, replyToUserId }),
   });
   return parseJson(res);
+}
+
+export async function fetchReplies(commentId: string, page = 1, limit = 10) {
+  const q = new URLSearchParams({ page: String(page), limit: String(limit) });
+  const res = await apiFetch(`/api/comments/${commentId}/replies?${q.toString()}`);
+  return parseJson<{ replies: any[]; pagination: Pagination }>(res);
+}
+
+export async function reactToComment(commentId: string, type: "like" | "dislike") {
+  const res = await apiFetch(`/api/comments/${commentId}/like`, {
+    method: "POST",
+    body: JSON.stringify({ type }),
+  });
+  return parseJson<{
+    action: string;
+    userReaction: string | null;
+    likesCount: number;
+    dislikesCount: number;
+  }>(res);
+}
+
+export async function deleteComment(commentId: string) {
+  const res = await apiFetch(`/api/comments/${commentId}`, { method: "DELETE" });
+  return parseJson<{ message: string }>(res);
+}
+
+export async function updateComment(commentId: string, content: string) {
+  const res = await apiFetch(`/api/comments/${commentId}`, {
+    method: "PUT",
+    body: JSON.stringify({ content }),
+  });
+  return parseJson<{ message: string; comment: any }>(res);
 }
 
 /* ── Follow API ─────────────────────────────────────────────────── */

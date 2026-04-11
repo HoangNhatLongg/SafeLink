@@ -10,6 +10,11 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useEffect } from 'react';
 import { Alert } from 'react-native';
 import { setSessionExpiredHandler } from '@/features/api/http';
+import * as Notifications from 'expo-notifications';
+import { registerForPushNotificationsAsync } from '@/features/SOS/notificationSetup';
+import { uploadPushToken, updateLocation } from '@/features/SOS/sosApi';
+import { getToken } from '@/features/auth/utils/storage';
+import * as Location from 'expo-location';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -42,6 +47,47 @@ export default function RootLayout() {
     });
     return () => setSessionExpiredHandler(null);
   }, [router, t]);
+
+  // SOS & Notifications Setup
+  useEffect(() => {
+    let responseListener: any;
+
+    (async () => {
+      const token = await getToken();
+      if (!token) return;
+
+      // 1. Đăng ký Push Token
+      const pushToken = await registerForPushNotificationsAsync();
+      if (pushToken) {
+        uploadPushToken(pushToken);
+      }
+
+      // 2. Cập nhật vị trí hiện tại lên server
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          updateLocation(loc.coords.latitude, loc.coords.longitude);
+        }
+      } catch (e) {
+        console.warn('Layout location update error:', e);
+      }
+    })();
+
+    // 3. Xử lý khi nhấn vào thông báo (ví dụ: chuyển đến bài bài SOS)
+    responseListener = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data;
+      if (data?.type === 'sos_alert' && data.postId) {
+        router.push({ pathname: '/post/[id]', params: { id: data.postId } });
+      }
+    });
+
+    return () => {
+      if (responseListener) {
+        Notifications.removeNotificationSubscription(responseListener);
+      }
+    };
+  }, [router]);
 
   return (
     <SafeAreaProvider>

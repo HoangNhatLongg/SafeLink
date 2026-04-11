@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
+import { Image as ExpoImage } from "expo-image";
 import React, { useMemo, useState } from "react";
 import {
   Alert,
-  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import MediaGrid, { MediaViewerModal, setFeedVideoMuted } from "./MediaGrid";
 import type { FeedPostUi } from "./mapPost";
+import { resolveImageUrl } from "./CachedImage";
 import { getToken, getUserJson } from "@/features/auth/utils/storage";
 import { useRouter } from "expo-router";
 import {
@@ -69,7 +70,7 @@ function VisibilityIcon({ visibility }: { visibility?: string }) {
   );
 }
 
-export default function PostCard({ post, onUpdated, onOpenComments, onHidden }: Props) {
+function PostCard({ post, onUpdated, onOpenComments, onHidden }: Props) {
   const router = useRouter();
   const [viewerVisible, setViewerVisible] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -78,11 +79,29 @@ export default function PostCard({ post, onUpdated, onOpenComments, onHidden }: 
   const [optionsVisible, setOptionsVisible] = useState(false);
   const [isOwnerOrMod, setIsOwnerOrMod] = useState({ isOwner: false, isMod: false });
 
+  // media: truyền URL phù hợp theo context
   const media = useMemo(() => {
     const result: { type: "image" | "video"; uri: string }[] = [];
-    if (post.video) result.push({ type: "video", uri: post.video });
+    if (post.video?.url) result.push({ type: "video", uri: post.video.url });
     if (post.images?.length) {
-      post.images.forEach((uri) => result.push({ type: "image", uri }));
+      post.images.forEach((img) => {
+        // Feed: dung medium (600px) de giam bang thong
+        const uri = resolveImageUrl(img, "feed");
+        if (uri) result.push({ type: "image", uri });
+      });
+    }
+    return result;
+  }, [post]);
+
+  // mediaForViewer: dung large (1200px) cho full-screen viewer
+  const mediaForViewer = useMemo(() => {
+    const result: { type: "image" | "video"; uri: string }[] = [];
+    if (post.video?.url) result.push({ type: "video", uri: post.video.url });
+    if (post.images?.length) {
+      post.images.forEach((img) => {
+        const uri = resolveImageUrl(img, "detail");
+        if (uri) result.push({ type: "image", uri });
+      });
     }
     return result;
   }, [post]);
@@ -221,9 +240,12 @@ export default function PostCard({ post, onUpdated, onOpenComments, onHidden }: 
     <View style={styles.card}>
       <View style={styles.header}>
         <TouchableOpacity onPress={openAuthorProfile} activeOpacity={0.8}>
-          <Image
+          <ExpoImage
             source={getAvatarSource(post.avatar)}
             style={styles.avatar}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={150}
           />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
@@ -324,7 +346,7 @@ export default function PostCard({ post, onUpdated, onOpenComments, onHidden }: 
 
       <MediaViewerModal
         visible={viewerVisible}
-        media={media}
+        media={mediaForViewer}
         index={selectedIndex}
         onClose={() => setViewerVisible(false)}
       />
@@ -394,6 +416,23 @@ export default function PostCard({ post, onUpdated, onOpenComments, onHidden }: 
     </View>
   );
 }
+
+// React.memo: chỉ re-render khi dữ liệu bài viết thay đổi
+// - Callbacks được wrap bằng useCallback ở parent (index.tsx) nên stable
+export default React.memo(PostCard, (prev, next) => {
+  const pp = prev.post;
+  const np = next.post;
+  return (
+    pp.id === np.id &&
+    pp.likes === np.likes &&
+    pp.dislikes === np.dislikes &&
+    pp.commentsCount === np.commentsCount &&
+    pp.shares === np.shares &&
+    pp.userReaction === np.userReaction &&
+    pp.isSaved === np.isSaved &&
+    pp.content === np.content
+  );
+});
 
 function ActionRow({
   icon,

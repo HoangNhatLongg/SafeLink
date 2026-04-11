@@ -15,6 +15,7 @@ import {
   reportPost,
   getSavedPosts,
   getNearbyPosts,
+  getRecommendedFeed,
 } from "../controllers/postController.js";
 import {
   addComment,
@@ -48,6 +49,9 @@ router.get("/saved", getSavedPosts);
 
 // Bài viết theo vị trí (PostGIS)
 router.get("/nearby", getNearbyPosts);
+
+// Feed đề xuất thông minh (5 tầng ưu tiên)
+router.get("/recommended", getRecommendedFeed);
 
 // Chi tiết, sửa, xóa
 router.get("/:id", getPostById);

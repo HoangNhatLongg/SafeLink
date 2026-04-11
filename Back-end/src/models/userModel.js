@@ -70,6 +70,17 @@ const userSchema = new mongoose.Schema(
     ],
     failedLoginAttempts: { type: Number, required: true, default: 0 },
     lockUntil: { type: Date },
+
+    // Expo Push Token — dùng để gửi push notification SOS
+    expoPushToken: { type: String, default: null },
+
+    // Vị trí cuối cùng đã biết (cập nhật khi app mở)
+    // Dùng để tìm user xung quanh khi có SOS
+    lastKnownLocation: {
+      latitude:  { type: Number },
+      longitude: { type: Number },
+      updatedAt: { type: Date },
+    },
   },
   { timestamps: true }
 );

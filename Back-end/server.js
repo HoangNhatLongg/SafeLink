@@ -1,10 +1,11 @@
-import dotenv from "dotenv";
-dotenv.config();
+// Env được load bởi `--env-file=.env` flag trong package.json scripts
+// (ESM: import hoạt động trước dotenv.config() nên không dùng dotenv thường được)
 
 import app from "./src/app.js";
 import mongoose from "mongoose";
 import "./src/config/passport.js";
 import { initGISTable } from "./src/config/postgresConfig.js";
+import { startSOSCleanupJob } from "./src/services/sosCleanup.js";
 
 const PORT = process.env.PORT || 5000;
 
@@ -21,6 +22,9 @@ mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
     console.log("✅ MongoDB connected");
+
+    // Khởi tạo SOS cleanup job
+    startSOSCleanupJob();
 
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`🚀 Server running on port ${PORT}`);

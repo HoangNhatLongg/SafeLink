@@ -65,7 +65,9 @@ export default function ProfileScreen() {
       const { user } = await fetchMe();
       setMe(user);
     } catch (e: any) {
-      Alert.alert("Lỗi", e.message, [{ text: "OK", onPress: () => router.back() }]);
+      // Không dùng router.back() trực tiếp — profile là tab screen, có thể không có stack
+      // Chỉ show alert, không navigate back
+      Alert.alert("Lỗi tải hồ sơ", e.message);
     } finally {
       setLoading(false);
     }

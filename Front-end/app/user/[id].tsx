@@ -32,6 +32,12 @@ export default function UserProfileScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
+  // An toàn: fallback về tabs nếu không có màn hình trước
+  const safeBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace("/(tabs)");
+  };
+
   const [user, setUser]           = useState<PublicUser | null>(null);
   const [loading, setLoading]     = useState(true);
   const [posts, setPosts]         = useState<FeedPostUi[]>([]);
@@ -48,7 +54,7 @@ export default function UserProfileScreen() {
         setUser(u);
         setFollowing(!!u.isFollowing);
       } catch (e: any) {
-        Alert.alert("Lỗi", e.message, [{ text: "OK", onPress: () => router.back() }]);
+        Alert.alert("Lỗi", e.message, [{ text: "OK", onPress: safeBack }]);
       } finally {
         setLoading(false);
       }
@@ -123,7 +129,7 @@ export default function UserProfileScreen() {
           <LinearGradient colors={["#cbcbcbff", "#cbcbcbff"]} style={s.cover} />
         )}
         {/* Back */}
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={s.backBtn} onPress={safeBack}>
           <Ionicons name="arrow-back" size={22} color="#fff" />
         </TouchableOpacity>
         {/* Avatar */}

@@ -45,13 +45,15 @@ export const addComment = async (req, res) => {
 
 /**
  * POST /api/comments/:id/replies
- * Thêm bình luận con (reply)
+ * Thêm bình luận con (reply) — flat replies cùng parentComment = root.
+ * Body: { content, replyToUserId? }
+ *   replyToUserId: ID của user đang được reply (để tag tên)
  */
 export const addReply = async (req, res) => {
   try {
     const { id: parentId } = req.params;
     const userId = req.user._id;
-    const { content } = req.body;
+    const { content, replyToUserId } = req.body;
 
     if (!content || !content.trim()) {
       return res.status(400).json({ message: "Nội dung bình luận không được để trống." });
@@ -63,25 +65,30 @@ export const addReply = async (req, res) => {
     const postVisible = await findActivePostVisibleToUser(parent.post, userId);
     if (!postVisible) return res.status(404).json({ message: "Không tìm thấy bài viết." });
 
-    // Không cho phép reply của reply (chỉ 2 cấp)
-    if (parent.parentComment) {
-      return res.status(400).json({ message: "Chỉ hỗ trợ 2 cấp bình luận." });
-    }
+    // Flat replies: nếu đang reply một reply con, gắn lên root comment
+    const rootParentId = parent.parentComment ? parent.parentComment : parentId;
+
+    // replyTo: tag người được reply (có thể là tác giả của parent hoặc một reply khác)
+    const replyToId = replyToUserId || parent.author;
 
     const reply = await Comment.create({
       post: parent.post,
       author: userId,
       content: content.trim(),
-      parentComment: parentId,
+      parentComment: rootParentId,
+      replyTo: replyToId,
     });
 
-    // Tăng repliesCount của comment cha và commentsCount của post
+    // Tăng repliesCount của root comment và commentsCount của post
     await Promise.all([
-      Comment.findByIdAndUpdate(parentId, { $inc: { repliesCount: 1 } }),
+      Comment.findByIdAndUpdate(rootParentId, { $inc: { repliesCount: 1 } }),
       Post.findByIdAndUpdate(parent.post, { $inc: { commentsCount: 1 } }),
     ]);
 
-    await reply.populate("author", "name email");
+    await reply.populate([
+      { path: "author", select: "name email avatar _id" },
+      { path: "replyTo", select: "name email avatar _id" },
+    ]);
 
     return res.status(201).json({ message: "Đã đăng bình luận con.", comment: reply });
   } catch (err) {
@@ -110,7 +117,7 @@ export const getComments = async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate("author", "name email")
+        .populate({ path: "author", select: "name email avatar _id" })
         .lean(),
       Comment.countDocuments({ post: postId, parentComment: null, status: "active" }),
     ]);
@@ -171,7 +178,8 @@ export const getReplies = async (req, res) => {
         .sort({ createdAt: 1 })
         .skip(skip)
         .limit(limit)
-        .populate("author", "name email")
+        .populate({ path: "author", select: "name email avatar _id" })
+        .populate({ path: "replyTo", select: "name email avatar _id" })
         .lean(),
       Comment.countDocuments({ parentComment: parentId, status: "active" }),
     ]);
@@ -225,7 +233,7 @@ export const updateComment = async (req, res) => {
 
     comment.content = content.trim();
     await comment.save();
-    await comment.populate("author", "name email");
+    await comment.populate({ path: "author", select: "name email avatar _id" });
 
     return res.json({ message: "Đã cập nhật bình luận.", comment });
   } catch (err) {

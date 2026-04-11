@@ -1,0 +1,289 @@
+import Post from "../models/postModel.js";
+import User from "../models/userModel.js";
+import { isCloudinaryConfigured, uploadImageToCloudinary, getMediaUrl } from "../middleware/upload.js";
+import { sendSOSNotification, sendSOSAdminNotification } from "../services/notificationService.js";
+import { cacheDelPattern } from "../utils/cache.js";
+
+// Khoảng cách (km) dùng công thức Haversine
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/* ─────────────────────────────────────────────────────────────
+   POST /api/sos
+   Body: FormData { category, description, radius, latitude, longitude, address, images[] }
+───────────────────────────────────────────────────────────────*/
+export const createSOS = async (req, res) => {
+  try {
+    const {
+      category = "other",
+      description = "",
+      radius = 1000,
+      latitude,
+      longitude,
+      address = "",
+    } = req.body;
+
+    if (!latitude || !longitude) {
+      return res.status(400).json({ message: "Cần cung cấp vị trí GPS để gửi SOS." });
+    }
+
+    // Upload ảnh (nếu có)
+    const images = [];
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        if (isCloudinaryConfigured && file.buffer) {
+          const result = await uploadImageToCloudinary(file.buffer, "sos");
+          images.push({
+            url: result.url,
+            thumbnail: result.thumbnail,
+            medium: result.medium,
+            large: result.large,
+            publicId: result.publicId,
+          });
+        } else if (file.path) {
+          images.push({ url: getMediaUrl(req, file.path) });
+        }
+      }
+    }
+
+    // Tạo SOS post
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+    const post = await Post.create({
+      author: req.user._id,
+      content: description,
+      images,
+      location: {
+        latitude: parseFloat(latitude),
+        longitude: parseFloat(longitude),
+        address,
+      },
+      visibility: "public",
+      postType: "sos",
+      sosCategory: category,
+      sosRadius: parseInt(radius),
+      sosStatus: "active",
+      sosExpiresAt: expiresAt,
+    });
+
+    // Populate author để trả về
+    await post.populate("author", "name avatar email");
+
+    // Xóa cache feed (SOS nên xuất hiện ngay)
+    cacheDelPattern("feed:");
+    cacheDelPattern("recommended:");
+
+    // ── Tìm users xung quanh trong bán kính sosRadius ──────────────
+    // Lấy tất cả user active có push token và lastKnownLocation
+    const nearbyUsers = await User.find({
+      _id: { $ne: req.user._id },
+      status: "active",
+      expoPushToken: { $exists: true, $ne: null },
+      "lastKnownLocation.latitude": { $exists: true },
+    })
+      .select("expoPushToken lastKnownLocation name")
+      .lean();
+
+    const radiusKm = parseInt(radius) / 1000;
+    const nearbyTokens = nearbyUsers
+      .filter((u) => {
+        const dist = haversineKm(
+          parseFloat(latitude),
+          parseFloat(longitude),
+          u.lastKnownLocation.latitude,
+          u.lastKnownLocation.longitude
+        );
+        return dist <= radiusKm;
+      })
+      .map((u) => u.expoPushToken)
+      .filter(Boolean);
+
+    // ── Lấy token của admin và moderator ─────────────────────────
+    const staffUsers = await User.find({
+      role: { $in: ["admin", "moderator"] },
+      expoPushToken: { $exists: true, $ne: null },
+    })
+      .select("expoPushToken")
+      .lean();
+
+    const staffTokens = staffUsers.map((u) => u.expoPushToken).filter(Boolean);
+
+    // ── Gửi push notification không block response ─────────────────
+    const sosData = {
+      category,
+      authorName: post.author.name,
+      postId: post._id.toString(),
+      location: { latitude: parseFloat(latitude), longitude: parseFloat(longitude), address },
+    };
+
+    // Fire and forget
+    Promise.all([
+      nearbyTokens.length > 0
+        ? sendSOSNotification(nearbyTokens, sosData)
+        : Promise.resolve(),
+      staffTokens.length > 0
+        ? sendSOSAdminNotification(staffTokens, sosData)
+        : Promise.resolve(),
+    ]).catch((err) => console.error("Push notification error:", err.message));
+
+    return res.status(201).json({
+      message: "Đã gửi tín hiệu SOS thành công.",
+      post: {
+        id: post._id,
+        author: post.author,
+        category: post.sosCategory,
+        description: post.content,
+        images: post.images,
+        location: post.location,
+        radius: post.sosRadius,
+        sosStatus: post.sosStatus,
+        expiresAt: post.sosExpiresAt,
+        createdAt: post.createdAt,
+      },
+      notified: {
+        nearby: nearbyTokens.length,
+        staff: staffTokens.length,
+      },
+    });
+  } catch (err) {
+    console.error("createSOS error:", err);
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/* ─────────────────────────────────────────────────────────────
+   GET /api/sos/active
+   Trả về danh sách SOS đang active (cho bản đồ)
+   Query: ?lat=&lon=&radius= (km, optional filter)
+───────────────────────────────────────────────────────────────*/
+export const getActiveSOS = async (req, res) => {
+  try {
+    const { lat, lon, radius = 50 } = req.query; // radius km
+
+    const sosPosts = await Post.find({
+      postType: "sos",
+      sosStatus: "active",
+      status: "active",
+    })
+      .select("author content location sosCategory sosRadius sosStatus sosExpiresAt createdAt images")
+      .populate("author", "name avatar")
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean();
+
+    // Filter theo khoảng cách nếu có tọa độ
+    let filtered = sosPosts;
+    if (lat && lon) {
+      filtered = sosPosts.filter((p) => {
+        if (!p.location?.latitude || !p.location?.longitude) return true;
+        const dist = haversineKm(
+          parseFloat(lat),
+          parseFloat(lon),
+          p.location.latitude,
+          p.location.longitude
+        );
+        return dist <= parseFloat(radius);
+      });
+    }
+
+    return res.json({
+      sos: filtered.map((p) => ({
+        id: p._id,
+        author: p.author,
+        category: p.sosCategory,
+        description: p.content,
+        images: p.images,
+        location: p.location,
+        radius: p.sosRadius,
+        sosStatus: p.sosStatus,
+        expiresAt: p.sosExpiresAt,
+        createdAt: p.createdAt,
+      })),
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/* ─────────────────────────────────────────────────────────────
+   PATCH /api/sos/:id/resolve
+   Đánh dấu SOS đã được giải quyết (author / admin / mod)
+───────────────────────────────────────────────────────────────*/
+export const resolveSOS = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const me = req.user;
+
+    const post = await Post.findById(id);
+    if (!post || post.postType !== "sos") {
+      return res.status(404).json({ message: "Không tìm thấy SOS." });
+    }
+
+    const isOwner = post.author.toString() === me._id.toString();
+    const isStaff = me.role === "admin" || me.role === "moderator";
+
+    if (!isOwner && !isStaff) {
+      return res.status(403).json({ message: "Không có quyền resolve SOS này." });
+    }
+
+    post.sosStatus = "resolved";
+    post.sosResolvedBy = me._id;
+    post.status = "deleted"; // Ẩn khỏi feed bình thường
+    await post.save();
+
+    cacheDelPattern("feed:");
+
+    return res.json({ message: "Đã đánh dấu SOS hoàn tất.", sosStatus: "resolved" });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/* ─────────────────────────────────────────────────────────────
+   PATCH /api/users/me/location
+   Cập nhật vị trí hiện tại của user (gọi khi app mở / foreground)
+   Body: { latitude, longitude }
+───────────────────────────────────────────────────────────────*/
+export const updateUserLocation = async (req, res) => {
+  try {
+    const { latitude, longitude } = req.body;
+    if (!latitude || !longitude) {
+      return res.status(400).json({ message: "Cần latitude và longitude." });
+    }
+
+    await User.findByIdAndUpdate(req.user._id, {
+      "lastKnownLocation.latitude": parseFloat(latitude),
+      "lastKnownLocation.longitude": parseFloat(longitude),
+      "lastKnownLocation.updatedAt": new Date(),
+    });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/* ─────────────────────────────────────────────────────────────
+   PATCH /api/users/me/push-token
+   Lưu Expo Push Token
+   Body: { token }
+───────────────────────────────────────────────────────────────*/
+export const updatePushToken = async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ message: "Token is required." });
+
+    await User.findByIdAndUpdate(req.user._id, { expoPushToken: token });
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};

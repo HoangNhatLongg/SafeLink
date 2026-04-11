@@ -1,141 +1,498 @@
-#PROJECT OVERVIEW
+# AI CONTEXT — SafeLink Project
 
-Tên dự án: Hệ thống chia sẻ thông tin cứu hộ
+> Cập nhật: 2026-04-10
+> Mục đích: Cung cấp ngữ cảnh đầy đủ cho AI assistant khi làm việc với dự án này.
 
-Mô tả:
-Hệ thống cho phép người dùng đăng tải, tìm kiếm và chia sẻ thông tin cứu hộ trong các tình huống khẩn cấp. Hỗ trợ thông báo SOS realtime, quản lý danh bạ cứu hộ, chia sẻ thư viện kỹ năng sơ cấp cứu và hệ thống kiểm duyệt nội dung.
+---
 
-#SYSTEM MODULES
+## 1. TỔNG QUAN DỰ ÁN
 
-1. Mobile App
-   Giao diện người dùng
-   Giao diện đăng ký/đăng nhập. Áp dụng cho các liên quan đến mạng xã hội. Xem bài đăng, đăng bài, tìm kiếm, like, share, bình luận, tìm kiếm bài viết. Cài đặt trang cá nhân.
-   Tra cứu cứu hộ. Quét vị trí hiện tại hoặc tìm kiếm thủ công. (Không cần đăng nhập)
-   Gửi SOS khẩn cấp (Không cần đăng nhập)
-   Mạng xã hội (đăng bài). Xem bài viết, đăng, xóa, sửa bài viết. Like, share, bình luận, tìm kiếm bài viết.
-   Thư viện kỹ năng (Không cần đăng nhập)
-   Trang tổng hợp tin tức mới (Không cần đăng nhập)
-   Nhận thông báo realtime
-   Cài đặt hệ thống và tài khoản
+**Tên dự án:** SafeLink — Hệ thống chia sẻ thông tin cứu hộ
 
-2. Backend
-   API hệ thống
-   Xử lý logic nghiệp vụ
-   Xử lý dữ liệu GIS (vị trí)
-   Xử lý spam và lọc nội dung
-   Phân loại bài đăng (khẩn cấp / thường)
-   Tích hợp AI xử lý nội dung
+**Mô tả:**
+Mạng xã hội tập trung vào an toàn cộng đồng, cho phép người dùng đăng tải, tìm kiếm và chia sẻ thông tin cứu hộ trong các tình huống khẩn cấp. Tích hợp: cảnh báo SOS realtime, định vị GIS, hệ thống mạng xã hội (bài viết, like, comment, follow), kiểm duyệt nội dung, và thư viện kỹ năng sơ cấp cứu.
 
-3. Admin Web
-   Quản lý người dùng
-   Quản lý danh bạ cứu hộ
-   Kiểm duyệt bài đăng
-   Quản lý thư viện kỹ năng
-   Phân quyền (Admin / Moderator)
-   Khóa / mở tài khoản
+---
 
-4. Kiểm thử & Triển khai
-   Kiểm thử chức năng
-   Kiểm thử hiệu năng
-   Triển khai thử nghiệm
-   Thu thập feedback
-   Đánh giá hệ thống
+## 2. TECH STACK
 
-#TECH STACK
+### Frontend
+| Công nghệ | Chi tiết |
+|-----------|---------|
+| **React Native** | Expo SDK ~54 |
+| **TypeScript** | ~5.9 |
+| **Expo Router** | ~6.0 (file-based routing) |
+| **Ngôn ngữ** | Tiếng Việt (i18next + react-i18next) |
+| **State** | useState/useCallback/useFocusEffect (React hooks thuần) |
+| **HTTP Client** | fetch gốc, wrapper `apiFetch` tự viết tại `features/api/http.ts` |
+| **Media** | expo-image-picker, expo-av, expo-video |
+| **Maps** | react-native-maps |
+| **Auth lưu trữ** | AsyncStorage |
 
-Frontend:
+### Backend
+| Công nghệ | Chi tiết |
+|-----------|---------|
+| **Node.js** | Express ^5 (ES Modules) |
+| **MongoDB** | mongoose ^9 — dữ liệu xã hội (User, Post, Comment, Like, Follow, Report, OTP, AuthToken) |
+| **PostgreSQL** | pg ^8 + PostGIS — lưu vị trí GPS bài viết (`post_locations`) |
+| **Auth** | JWT (jsonwebtoken) + bcryptjs, Token whitelist trong MongoDB |
+| **OAuth** | Passport.js (Google OAuth2, Facebook) |
+| **Email** | Nodemailer — OTP xác thực |
+| **Upload** | Multer — ảnh + video (lưu vào `../uploads/`) |
+| **Port** | 5000 (default) |
+| **IP Dev** | `192.168.1.185:5000` (đổi trong `constants/api.ts` khi thay mạng) |
 
-React Native (Expo)
-TypeScript
+---
 
-Backend:
+## 3. CẤU TRÚC THƯ MỤC
 
-Node.js (Express)
+```
+SafeLink/
+├── Back-end/
+│   ├── server.js              # Entry: kết nối MongoDB + PostgreSQL, start server
+│   ├── src/
+│   │   ├── app.js             # Express setup, mount routes
+│   │   ├── config/
+│   │   │   ├── db.js          # MongoDB connect
+│   │   │   ├── passport.js    # Google + Facebook OAuth
+│   │   │   └── postgresConfig.js # Pool pg, initGISTable, CRUD post_locations
+│   │   ├── models/            # Mongoose schemas
+│   │   │   ├── userModel.js
+│   │   │   ├── postModel.js
+│   │   │   ├── commentModel.js
+│   │   │   ├── likeModel.js
+│   │   │   ├── followModel.js
+│   │   │   ├── reportModel.js
+│   │   │   ├── otpModel.js
+│   │   │   └── authTokenModel.js
+│   │   ├── controllers/
+│   │   │   ├── authController.js
+│   │   │   ├── postController.js   # CRUD, like, dislike, save, hide, share, report, feed, nearby, recommended
+│   │   │   ├── commentController.js
+│   │   │   ├── followController.js
+│   │   │   ├── userController.js   # Profile, avatar, cover, suggestions
+│   │   │   ├── moderationController.js
+│   │   │   └── searchController.js
+│   │   ├── routes/
+│   │   │   ├── authRoutes.js       # /api/auth
+│   │   │   ├── postRoutes.js       # /api/posts
+│   │   │   ├── commentRoutes.js    # /api/comments
+│   │   │   ├── followRoutes.js     # /api/users/:id/follow|followers|following
+│   │   │   ├── userRoutes.js       # /api/users
+│   │   │   ├── moderationRoutes.js # /api/moderation
+│   │   │   └── searchRoutes.js     # /api/search
+│   │   ├── middleware/
+│   │   │   ├── authMiddleware.js   # verifyToken, optionalAuth
+│   │   │   ├── roleMiddleware.js   # requireRole (moderator/admin)
+│   │   │   └── upload.js           # Multer: uploadPostMedia, uploadAvatarMedia, uploadCoverMedia
+│   │   ├── services/
+│   │   │   ├── authService.js      # issueAuthToken, OTP logic
+│   │   │   ├── emailService.js     # Gửi OTP qua email
+│   │   │   └── geocodeService.js   # Reverse geocode từ lat/lng
+│   │   └── utils/
+│   └── assets/
+│
+├── Front-end/
+│   ├── app/
+│   │   ├── _layout.tsx            # Root Stack: session expired handler, màn hình toàn app
+│   │   ├── (tabs)/
+│   │   │   ├── _layout.tsx        # Tab navigator
+│   │   │   ├── index.tsx          # Tab Home: Feed bài viết (FlatList, phân trang)
+│   │   │   ├── sos.tsx            # Tab SOS
+│   │   │   ├── directory.tsx      # Tab Danh bạ cứu hộ (không cần đăng nhập)
+│   │   │   ├── skills.tsx         # Tab Thư viện kỹ năng
+│   │   │   └── menu.tsx           # Tab Menu (Settings, Logout...)
+│   │   ├── auth/
+│   │   │   └── verify-otp.tsx     # OTP xác thực đăng ký
+│   │   ├── post/
+│   │   │   └── [id].tsx           # Chi tiết bài viết + comments
+│   │   ├── user/
+│   │   │   └── [id].tsx           # Xem profile người dùng khác
+│   │   ├── create-post.tsx        # Tạo/sửa bài (ảnh, video, vị trí, hashtag)
+│   │   ├── profile.tsx            # Trang cá nhân của tôi
+│   │   ├── followers-list.tsx     # Danh sách followers/following
+│   │   ├── search.tsx             # Global search (users + posts + hashtags)
+│   │   ├── saved-posts.tsx        # Bài đã lưu
+│   │   ├── nearby.tsx             # Bài viết gần vị trí (PostGIS)
+│   │   ├── moderation.tsx         # Báo cáo vi phạm
+│   │   ├── privacy.tsx            # Cài đặt quyền riêng tư
+│   │   ├── login.tsx / register.tsx
+│   │   └── oauth.tsx              # OAuth callback handler
+│   │
+│   ├── features/
+│   │   ├── api/
+│   │   │   └── http.ts            # apiFetch (Bearer token, timeout 5 phút), parseJson, ApiError
+│   │   ├── auth/
+│   │   │   ├── components/
+│   │   │   ├── screens/
+│   │   │   ├── services/          # authApi.ts
+│   │   │   └── utils/storage.ts   # getToken, saveToken, clearSession, getUserJson, saveUserJson
+│   │   ├── social/
+│   │   │   ├── PostCard.tsx       # Card bài viết (like, dislike, comment, save, hide, share, report)
+│   │   │   ├── CreatePostBox.tsx
+│   │   │   ├── MediaGrid.tsx      # Grid ảnh/video responsive
+│   │   │   ├── ImageGrid.tsx / ImageGridPreview.tsx
+│   │   │   ├── VideoPlayer.tsx / VideoFullscreen.tsx
+│   │   │   ├── ImageViewerModal.tsx
+│   │   │   ├── BreakingNewsTicker.tsx
+│   │   │   ├── LayoutPicker.tsx
+│   │   │   ├── mapPost.ts         # mapApiPostToUi (API → UI type)
+│   │   │   ├── videoVisibilityStore.ts # Pause video ngoài viewport
+│   │   │   ├── utils/
+│   │   │   └── services/
+│   │   │       └── postsApi.ts    # Tất cả call API liên quan bài viết, follow, search
+│   │   ├── user/
+│   │   │   └── services/userApi.ts
+│   │   ├── moderation/
+│   │   ├── emergency/
+│   │   └── SOS/
+│   │       ├── MapSection.tsx
+│   │       ├── agencyData.ts
+│   │       └── locationService.ts
+│   │
+│   ├── constants/
+│   │   ├── api.ts                 # API_BASE = 'http://<IP>:5000'  ← đổi IP khi thay mạng
+│   │   └── theme.ts
+│   ├── components/                # Shared UI components
+│   ├── hooks/
+│   ├── locales/                   # i18n translations
+│   ├── data/
+│   └── assets/
+│
+├── Context/
+│   └── AI_Context.md              # File này
+└── uploads/                       # Media uploads (ảnh/video bài viết)
+```
 
-Database:
+---
 
-MongoDB - Lưu trữ dữ liệu mạng xã hội, bài viết, người dùng, thư viện kỹ năng.
-PostgreSQL - Lưu trữ dữ liệu danh bạ cứu hộ, thông tin cứu hộ, dữ liệu bản đồ GIS
+## 4. DATABASE SCHEMA (MongoDB)
 
-Realtime:
+### User
+```js
+{
+  name, email (unique, required), password (bcrypt), authType: 'local|google|facebook',
+  googleId, facebookId,
+  role: 'user|moderator|admin',  status: 'active|banned',
+  avatar, cover,
+  profile: { bio, birthday, hometown, phone, privacy: { showBirthday, showHometown, showPhone, showEmail, showFollowers, showFollowing } },
+  devices: [{ deviceId, pushToken, isTrusted, lastLogin }],
+  failedLoginAttempts, lockUntil,
+  timestamps
+}
+```
 
-WebSocket / Firebase
+### Post
+```js
+{
+  author (ref User), content (max 5000), tags: [String],
+  images: [{ url, filename }], videos: [{ url, filename }],
+  location: { latitude, longitude, address },
+  visibility: 'public|friends|private',
+  postType: 'normal|sos',  sosExpiresAt,
+  likesCount, dislikesCount, score (= likes - dislikes), commentsCount, sharesCount,
+  savedBy: [userId], hiddenBy: [userId],
+  status: 'active|deleted|flagged',
+  timestamps
+}
+// Indexes: {status,createdAt}, {status,score}, {author,status,createdAt}, {postType,status,createdAt}
+```
 
-#CORE FEATURES
-Đăng nhập / đăng ký
-Đăng bài cứu hộ
-Phân loại bài đăng (khẩn cấp / thường)
-Tìm kiếm cứu hộ theo vị trí
-Gửi SOS realtime
-Danh bạ cứu hộ
-Kiểm duyệt nội dung
-Thư viện kỹ năng
-Cài đặt hệ thống
+### Comment
+```js
+{ post (ref Post), author (ref User), content, parentComment, likesCount, status, timestamps }
+```
 
-#USER ROLES
-User (người dùng)
-Moderator (kiểm duyệt)
-Admin (quản trị)
+### Like
+```js
+{ user, target (post|comment id), targetType: 'Post|Comment', reactionType: 'like|dislike', timestamps }
+```
 
-#MAIN FLOWS
+### Follow
+```js
+{ follower (ref User), following (ref User), timestamps }
+// unique index: { follower, following }
+```
 
-1. SOS Flow
-   User gửi SOS
-   Backend xử lý vị trí (GIS)
-   Gửi thông báo realtime đến người gần nhất
-   Hiển thị trên Mobile App
+### Report
+```js
+{ reporter, targetPost, reason: 'spam|inappropriate|misinformation|harassment|violence|copyright|other',
+  description, status: 'pending|reviewed|dismissed', timestamps }
+```
 
-2. Social Flow
-   User đăng bài
-   Backend xử lý AI (phân loại)
-   Nếu hợp lệ thì hiển thị lên Moblie app
-   Nếu không hợp lệ thì hiển thị lên Admin Web chờ kiểm duyệt
+### OTP
+```js
+{ email, otp, type: 'register|forgot', expiresAt (TTL), pendingUserData }
+```
 
-3. Admin Flow
-   Admin đăng nhập
-   Admin kiểm duyệt bài đăng
-   Admin quản lý danh bạ cứu hộ
-   Admin quản lý thư viện kỹ năng
-   Admin phân quyền (Admin / Moderator)
-   Admin khóa / mở tài khoản
-   Admin quản lý danh sách tài khoản
+### AuthToken (whitelist)
+```js
+{ userId, token, authType, createdAt (TTL) }
+```
 
-#API MODULES
-/auth → đăng nhập, đăng ký
-/post → bài đăng
-/sos → SOS
-/user → người dùng
-/admin → quản trị
-/rescue → danh bạ cứu hộ
+### PostgreSQL — post_locations
+```sql
+post_id VARCHAR UNIQUE, user_id VARCHAR,
+latitude DOUBLE, longitude DOUBLE,
+location GEOGRAPHY(POINT, 4326),   -- PostGIS
+address TEXT, created_at TIMESTAMPTZ
+-- Index: GIST(location) cho ST_DWithin
+```
 
-#DATABASE DESIGN
-User:
-email
-name
-password
-role
+---
 
-#CURRENT ISSUES
+## 5. API ENDPOINTS
 
-#RECENT CHANGES
+### Auth — `/api/auth`
+| Method | Path | Mô tả | Auth |
+|--------|------|-------|------|
+| POST | `/register-request` | Gửi OTP đăng ký | Không |
+| POST | `/register-verify` | Xác minh OTP, tạo user | Không |
+| POST | `/login` | Đăng nhập local | Không |
+| POST | `/verify-device` | OTP xác thực thiết bị lạ | Không |
+| POST | `/forgot-password` | Gửi OTP reset mật khẩu | Không |
+| POST | `/reset-password` | Đặt lại mật khẩu | Không |
+| POST | `/logout` | Xóa token khỏi whitelist | JWT |
+| GET | `/google` → `/google/callback` | OAuth Google | - |
+| GET | `/facebook` → `/facebook/callback` | OAuth Facebook | - |
 
-#CODING RULES
-TypeScript strict
-Tách controller / service / repository
-Không viết business logic trong controller
-API phải có validate input
-Xử lý lỗi thống nhất
+### Posts — `/api/posts` (yêu cầu JWT)
+| Method | Path | Mô tả |
+|--------|------|-------|
+| GET | `/` | Feed chuẩn (phân trang, lọc theo authorId) |
+| POST | `/` | Tạo bài viết (FormData: content, tags, images, videos, lat, lng, postType) |
+| GET | `/saved` | Bài đã lưu |
+| GET | `/nearby` | Bài gần vị trí (PostGIS, params: lat, lng, radius) |
+| GET | `/recommended` | Feed đề xuất 5 tầng (SOS → Friends → Nearby → Top → Remaining) |
+| GET | `/:id` | Chi tiết bài |
+| PUT | `/:id` | Sửa bài (FormData) |
+| DELETE | `/:id` | Xóa bài |
+| POST | `/:id/like` | Like (toggle) |
+| POST | `/:id/dislike` | Dislike (toggle) |
+| POST | `/:id/save` | Lưu/bỏ lưu |
+| POST | `/:id/hide` | Ẩn/bỏ ẩn |
+| POST | `/:id/share` | Chia sẻ |
+| POST | `/:id/report` | Báo cáo |
+| GET | `/:id/comments` | Lấy comments |
+| POST | `/:id/comments` | Thêm comment |
 
-#SECURITY REQUIREMENTS
-Rate limit API
-Xác thực JWT
-Validate input
-Chống spam
-Phân quyền rõ ràng
-Xác thực 2FA với thiết bị lạ
+### Comments — `/api/comments` (JWT)
+- CRUD comment, reply, reactions
 
-#ROADMAP
-Tối ưu realtime
-Nâng cấp AI phân loại
-Thêm push notification
-Triển khai production
+### Users — `/api/users` (JWT / optional)
+| Method | Path | Mô tả | Auth |
+|--------|------|-------|------|
+| GET | `/me` | Thông tin tôi | JWT |
+| PATCH | `/me` | Cập nhật profile | JWT |
+| POST | `/me/avatar` | Upload ảnh đại diện | JWT |
+| POST | `/me/cover` | Upload ảnh bìa | JWT |
+| GET | `/suggestions` | Gợi ý người theo dõi | JWT |
+| GET | `/:id/profile` | Xem profile người khác | Optional |
+| POST | `/:id/follow` | Follow | JWT |
+| DELETE | `/:id/follow` | Unfollow | JWT |
+| GET | `/:id/followers` | Danh sách người theo dõi | JWT |
+| GET | `/:id/following` | Danh sách đang theo dõi | JWT |
+
+### Search — `/api/search` (JWT)
+| Method | Path | Mô tả |
+|--------|------|-------|
+| GET | `/` | Global search users + posts (params: q, type, page, limit) |
+| GET | `/tags/suggest` | Gợi ý hashtag (params: q) |
+
+### Moderation — `/api/moderation` (Moderator/Admin)
+- Quản lý báo cáo, duyệt/từ chối bài viết
+
+---
+
+## 6. LUỒNG XỬ LÝ CHÍNH
+
+### Authentication Flow
+1. User nhập email → backend gửi OTP email
+2. Xác minh OTP → tạo User + cấp JWT token
+3. Token được lưu vào DB (whitelist) và AsyncStorage (client)
+4. Mỗi request gửi `Authorization: Bearer <token>`
+5. Backend verify JWT + kiểm tra whitelist + lấy user từ DB
+6. Thiết bị lạ → yêu cầu OTP bổ sung (2FA)
+7. Token hết hạn → `onSessionExpired` alert → redirect `/login`
+
+### Feed & Recommendation (5 tầng)
+```
+Tier 1: SOS posts (postType='sos', còn hạn)
+Tier 2: Bài của người đang follow
+Tier 3: Bài gần vị trí GPS (PostGIS ST_DWithin)
+Tier 4: Bài điểm cao nhất (score = likes - dislikes)
+Tier 5: Các bài còn lại
+```
+- Bài hidden/deleted bị loại khỏi feed
+- Phân trang: page + limit, trả về `meta.tiers` thống kê từng tier
+
+### Post Upload Flow
+- Client gửi `FormData` (ảnh/video + metadata)
+- Multer lưu file vào `uploads/` (max 200MB video, 20MB ảnh)
+- Backend lưu vị trí vào PostgreSQL (PostGIS) nếu có lat/lng
+- Timeout frontend: **5 phút** (đủ cho video lớn qua Wi-Fi)
+
+### Follow System
+- Bảng `follows`: follower → following
+- Unfollow = xóa document
+- Khi xem profile người khác: `optionalAuth` check `isFollowing`
+
+---
+
+## 7. CODING RULES
+
+- **TypeScript strict** phía Frontend
+- **ES Modules** (`import/export`) phía Backend (type: "module")
+- Tách rõ **controller / service / middleware** — không viết business logic trong controller
+- API luôn trả JSON: `{ message, data? }` hoặc `{ error }`
+- Xử lý lỗi nhất quán: try/catch trong controller, trả status code phù hợp
+- Upload media: dùng `uploadPostMiddleware` bắt lỗi Multer rõ ràng (400 thay vì 500)
+- Frontend: dùng `apiFetch` + `parseJson` — không dùng axios trực tiếp
+- Comments trong code: Tiếng Việt
+- Tên biến/function: tiếng Anh (camelCase)
+
+---
+
+## 8. SECURITY
+
+| Cơ chế | Mô tả |
+|--------|-------|
+| JWT | Access token, lưu whitelist trong MongoDB (AuthToken) |
+| OTP | Đăng ký + thiết bị lạ + quên mật khẩu (Nodemailer, TTL tự động xóa) |
+| bcryptjs | Hash password |
+| Token revocation | Logout xóa AuthToken khỏi DB |
+| Account lock | failedLoginAttempts + lockUntil |
+| Role-based | `requireRole('moderator'|'admin')` middleware |
+| Banned check | Middleware trả 403 nếu `user.status === 'banned'` |
+| Multer limits | File size + MIME type kiểm tra |
+| CORS | Đang để mở (development) — cần restrict production |
+
+---
+
+## 9. FRONTEND PATTERNS
+
+### HTTP Client (`features/api/http.ts`)
+```ts
+apiFetch(path, options, skipAuth?)  // Tự thêm Bearer token, timeout 5 phút
+parseJson<T>(res)                   // Parse JSON + throw ApiError nếu !res.ok
+ApiError { message, status }        // Lỗi có HTTP status
+setSessionExpiredHandler(fn)        // Đăng ký callback khi 401
+```
+
+### Storage (`features/auth/utils/storage.ts`)
+```ts
+getToken() / saveToken() / clearSession()
+getUserJson() / saveUserJson()     // Cache user info local
+```
+
+### Posts API (`features/social/services/postsApi.ts`)
+```ts
+fetchFeed(page, limit, authorId?)
+fetchRecommendedFeed(page, limit, lat?, lng?, radius?)
+fetchNearby(lat, lng, radius, limit)
+fetchSavedPosts(page, limit)
+fetchPost(id)
+createPostFormData(form: FormData)
+updatePostFormData(id, form)
+deletePost(id)
+likePost(id) / dislikePost(id)
+toggleSavePost(id) / toggleHidePost(id)
+sharePost(id) / reportPost(id, reason, description?)
+fetchComments(postId, page, limit)
+addComment(postId, content)
+followUser(userId) / unfollowUser(userId)
+fetchFollowers(userId, search, page, limit)
+fetchFollowing(userId, search, page, limit)
+fetchGlobalSearch(q, type, page, limit)
+fetchTagSuggestions(q)
+```
+
+### Navigation (Expo Router file-based)
+```
+(tabs)/index       → Home Feed
+(tabs)/sos         → SOS
+(tabs)/directory   → Danh bạ
+(tabs)/skills      → Kỹ năng
+(tabs)/menu        → Menu
+create-post        → Tạo bài viết (stack modal)
+post/[id]          → Chi tiết bài
+user/[id]          → Profile người dùng
+profile            → Profile của tôi
+search             → Tìm kiếm toàn cục
+saved-posts        → Bài đã lưu
+nearby             → Bài viết gần đây
+followers-list     → Followers/Following
+moderation         → Báo cáo
+privacy            → Quyền riêng tư
+auth/verify-otp    → OTP xác thực
+oauth              → OAuth callback
+```
+
+---
+
+## 10. CONFIGURATION
+
+### Đổi IP backend
+File: `Front-end/constants/api.ts`
+```ts
+export const API_BASE = 'http://<IP_MÁY_BACKEND>:5000';
+```
+
+### Backend .env
+```
+PORT=5000
+MONGO_URI=mongodb+srv://...
+JWT_SECRET=...
+POSTGRES_URI=postgresql://...  # optional (PostGIS)
+EMAIL_USER=...
+EMAIL_PASS=...
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+FACEBOOK_APP_ID=...
+FACEBOOK_APP_SECRET=...
+OAUTH_SUCCESS_REDIRECT=...
+```
+
+---
+
+## 11. TRẠNG THÁI HIỆN TẠI
+
+### Đã hoàn thành ✅
+- Hệ thống Auth: đăng ký/đăng nhập OTP, Google/Facebook OAuth, JWT whitelist, 2FA thiết bị lạ
+- CRUD bài viết (text + ảnh + video), hỗ trợ ảnh/video đồng thời
+- PostCard: like, dislike, save, hide, share, report, comments
+- Feed phân trang (infinite scroll)
+- Feed đề xuất 5 tầng (SOS → Friends → Nearby → TopScore → Remaining)
+- Bài viết theo vị trí (PostGIS ST_DWithin)
+- Hệ thống Follow/Unfollow, danh sách followers/following
+- Global Search: tìm kiếm users và posts
+- Gợi ý hashtag (tag suggestions)
+- Profile người dùng: xem, sửa, avatar, cover, privacy settings
+- Trang bài viết đã lưu
+- Kiểm duyệt (Moderation): duyệt/từ chối báo cáo
+- Video upload với timeout 5 phút
+- Camera capture trực tiếp khi tạo bài
+- i18n (Tiếng Việt)
+
+### Chưa hoàn thành / Đang phát triển 🔧
+- Module SOS (gửi tín hiệu khẩn cấp thời gian thực)
+- Thư viện kỹ năng sơ cấp cứu (Tab Skills)
+- Danh bạ cứu hộ (Tab Directory — dữ liệu tĩnh hiện tại)
+- Push Notification (chưa tích hợp FCM/APNS)
+- Admin Web (chưa xây dựng)
+- Rate limiting API
+- WebSocket / Realtime notifications
+- AI phân loại nội dung
+- Production deployment
+
+---
+
+## 12. ROADMAP
+
+1. **SOS Realtime** — WebSocket, notify người gần nhất
+2. **Push Notification** — FCM/APNS cho bài SOS
+3. **Thư viện kỹ năng** — CRUD bài từ Admin
+4. **Admin Web** — Dashboard kiểm duyệt, quản lý user
+5. **AI phân loại** — Tự động detect bài vi phạm
+6. **Rate Limit** — Express rate-limiter
+7. **Production** — Docker, CI/CD, nginx, HTTPS
