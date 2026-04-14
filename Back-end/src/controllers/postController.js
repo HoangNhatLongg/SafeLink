@@ -195,7 +195,7 @@ export const createPost = async (req, res) => {
 
 export const getFeed = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user ? req.user._id : null;
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(50, parseInt(req.query.limit) || 10);
     const skip = (page - 1) * limit;
@@ -203,23 +203,25 @@ export const getFeed = async (req, res) => {
     // Cache key theo user + page (feed riêng mỗi user, TTL 30 giây)
     // Không cache khi filter theo authorId (profile view)
     const canCache = !req.query.authorId;
-    const cacheKey = `feed:${userId}:p${page}:l${limit}`;
+    const cacheKey = `feed:${userId || 'public'}:p${page}:l${limit}`;
 
     const result = await withCache(cacheKey, canCache ? 30 : 0, async () => {
-      const friendAuthorIds = await getFriendAuthorIds(userId);
+      const friendAuthorIds = userId ? await getFriendAuthorIds(userId) : [];
 
       const filter = {
         status: "active",
-        hiddenBy: { $nin: [userId] },
       };
+      if (userId) {
+        filter.hiddenBy = { $nin: [userId] };
+      }
 
       if (req.query.authorId) {
         const aid = req.query.authorId;
         filter.author = aid;
-        const profileVis = authorProfileVisibilityMatch(aid, userId.toString(), friendAuthorIds);
+        const profileVis = authorProfileVisibilityMatch(aid, userId?.toString() || null, friendAuthorIds);
         if (profileVis) filter.$and = [profileVis];
       } else {
-        filter.$and = [feedVisibilityMatch(userId, friendAuthorIds)];
+        filter.$and = [feedVisibilityMatch(userId?.toString() || null, friendAuthorIds)];
       }
 
       const [posts, total] = await Promise.all([
@@ -228,7 +230,7 @@ export const getFeed = async (req, res) => {
           .skip(skip)
           .limit(limit)
           // Chỉ lấy fields cần thiết
-          .select("author content tags images videos location likesCount dislikesCount score commentsCount sharesCount savedBy postType visibility status createdAt")
+          .select("author content tags images videos location likesCount dislikesCount score commentsCount sharesCount savedBy postType sosCategory visibility status createdAt")
           .populate("author", "name email avatar")
           .lean(),
         Post.countDocuments(filter),
@@ -237,18 +239,18 @@ export const getFeed = async (req, res) => {
       const postIds = posts.map((p) => p._id.toString());
       const locationMap = await getPostLocations(postIds);
 
-      const userReactions = await Like.find({
+      const userReactions = userId ? await Like.find({
         user: userId,
         target: { $in: postIds },
         targetType: "Post",
-      }).lean();
+      }).lean() : [];
       const reactionMap = userReactions.reduce((acc, r) => {
         acc[r.target.toString()] = r.type;
         return acc;
       }, {});
 
       const savedPostIds = new Set(
-        posts.filter((p) => p.savedBy?.some((id) => id.toString() === userId.toString())).map((p) => p._id.toString())
+        userId ? posts.filter((p) => p.savedBy?.some((id) => id.toString() === userId.toString())).map((p) => p._id.toString()) : []
       );
 
       const enrichedPosts = posts.map((post) => ({
@@ -286,13 +288,14 @@ export const getFeed = async (req, res) => {
 export const getPostById = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user._id;
+    const userId = req.user ? req.user._id : null;
 
-    const post = await Post.findOne({
-      _id: id,
-      status: "active",
-      hiddenBy: { $nin: [userId] },
-    })
+    const query = { _id: id, status: "active" };
+    if (userId) {
+      query.hiddenBy = { $nin: [userId] };
+    }
+
+    const post = await Post.findOne(query)
       .populate("author", "name email avatar")
       .lean();
 
@@ -300,14 +303,14 @@ export const getPostById = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy bài viết." });
     }
 
-    const friendAuthorIds = await getFriendAuthorIds(userId);
-    if (!canViewerSeePost(post, userId, friendAuthorIds)) {
+    const friendAuthorIds = userId ? await getFriendAuthorIds(userId) : [];
+    if (!canViewerSeePost(post, userId?.toString() || null, friendAuthorIds)) {
       return res.status(404).json({ message: "Không tìm thấy bài viết." });
     }
 
     const [locationData, userLike] = await Promise.all([
       getPostLocation(id),
-      Like.findOne({ user: userId, target: id, targetType: "Post" }).lean(),
+      userId ? Like.findOne({ user: userId, target: id, targetType: "Post" }).lean() : Promise.resolve(null),
     ]);
 
     return res.json({
@@ -315,7 +318,7 @@ export const getPostById = async (req, res) => {
         ...post,
         location: locationData || post.location,
         userReaction: userLike?.type || null,
-        isSaved: post.savedBy?.some((uid) => uid.toString() === userId.toString()) || false,
+        isSaved: userId ? (post.savedBy?.some((uid) => uid.toString() === userId.toString()) || false) : false,
       },
     });
   } catch (err) {
@@ -715,15 +718,17 @@ export const getNearbyPosts = async (req, res) => {
       return res.json({ posts: [], locations: [] });
     }
 
-    const friendAuthorIds = await getFriendAuthorIds(userId);
-    const vis = feedVisibilityMatch(userId, friendAuthorIds);
+    const friendAuthorIds = userId ? await getFriendAuthorIds(userId) : [];
+    const vis = feedVisibilityMatch(userId?.toString() || null, friendAuthorIds);
 
-    const postsRaw = await Post.find({
+    const query = {
       _id: { $in: ids },
       status: "active",
-      hiddenBy: { $nin: [userId] },
       $and: [vis],
-    })
+    };
+    if (userId) query.hiddenBy = { $nin: [userId] };
+
+    const postsRaw = await Post.find(query)
       .populate("author", "name email avatar")
       .lean();
 
@@ -740,20 +745,20 @@ export const getNearbyPosts = async (req, res) => {
     }, {});
 
     const postIds = sorted.map((p) => p._id.toString());
-    const userReactions = await Like.find({
+    const userReactions = userId ? await Like.find({
       user: userId,
       target: { $in: postIds },
       targetType: "Post",
-    }).lean();
+    }).lean() : [];
     const reactionMap = userReactions.reduce((acc, r) => {
       acc[r.target.toString()] = r.type;
       return acc;
     }, {});
 
     const savedPostIds = new Set(
-      sorted
+      userId ? sorted
         .filter((p) => p.savedBy?.some((id) => id.toString() === userId.toString()))
-        .map((p) => p._id.toString())
+        .map((p) => p._id.toString()) : []
     );
 
     const enrichedPosts = sorted.map((post) => {
@@ -835,8 +840,8 @@ const enrichPosts = async (posts, userId, locationMap = {}, reactionMap = {}, sa
  */
 export const getRecommendedFeed = async (req, res) => {
   try {
-    const userId = req.user._id;
-    const userIdStr = userId.toString();
+    const userId = req.user ? req.user._id : null;
+    const userIdStr = userId ? userId.toString() : null;
 
     const limit = Math.min(50, parseInt(req.query.limit) || 20);
     const page  = Math.max(1, parseInt(req.query.page) || 1);
@@ -855,7 +860,7 @@ export const getRecommendedFeed = async (req, res) => {
 
     // ─ Context ───────────────────────────────────────────
     const [friendAuthorIds, nearbyRows] = await Promise.all([
-      getFriendAuthorIds(userId),
+      userId ? getFriendAuthorIds(userId) : Promise.resolve([]),
       hasGPS && process.env.POSTGRES_URI
         ? findNearbyPostIds(lat, lng, radius, nearbySlots * 3).catch((e) => {
             console.warn("findNearbyPostIds skipped:", e.message);
@@ -864,12 +869,12 @@ export const getRecommendedFeed = async (req, res) => {
         : Promise.resolve([]),
     ]);
 
-    const visFilter = feedVisibilityMatch(userId, friendAuthorIds);
+    const visFilter = feedVisibilityMatch(userIdStr, friendAuthorIds);
     const baseFilter = {
       status: "active",
-      hiddenBy: { $nin: [userId] },
       $and: [visFilter],
     };
+    if (userId) baseFilter.hiddenBy = { $nin: [userId] };
 
     // ID bài viết đã đưa vào kết quả (để loại trậng lấp)
     const seenIds = new Set();

@@ -3,6 +3,7 @@ import User from "../models/userModel.js";
 import { isCloudinaryConfigured, uploadImageToCloudinary, getMediaUrl } from "../middleware/upload.js";
 import { sendSOSNotification, sendSOSAdminNotification } from "../services/notificationService.js";
 import { cacheDelPattern } from "../utils/cache.js";
+import { savePostLocation, deletePostLocation } from "../config/postgresConfig.js";
 
 // Khoảng cách (km) dùng công thức Haversine
 function haversineKm(lat1, lon1, lat2, lon2) {
@@ -76,6 +77,21 @@ export const createSOS = async (req, res) => {
 
     // Populate author để trả về
     await post.populate("author", "name avatar email");
+
+    // ── Đồng bộ tọa độ sang PostgreSQL/PostGIS ─────────────────────
+    // Giúp các tính năng GIS (findNearbyPostIds, ST_DWithin...) hoạt động với SOS
+    try {
+      await savePostLocation(
+        post._id.toString(),
+        req.user._id.toString(),
+        parseFloat(latitude),
+        parseFloat(longitude),
+        address || null
+      );
+    } catch (gisErr) {
+      // Không crash luồng chính nếu PostgreSQL lỗi
+      console.warn("⚠️ Không thể đồng bộ SOS vào PostgreSQL:", gisErr.message);
+    }
 
     // Xóa cache feed (SOS nên xuất hiện ngay)
     cacheDelPattern("feed:");
@@ -238,6 +254,13 @@ export const resolveSOS = async (req, res) => {
     post.sosResolvedBy = me._id;
     post.status = "deleted"; // Ẩn khỏi feed bình thường
     await post.save();
+
+    // ── Xóa tọa độ khỏi PostgreSQL/PostGIS ────────────────────────
+    try {
+      await deletePostLocation(id);
+    } catch (gisErr) {
+      console.warn("⚠️ Không thể xóa SOS khỏi PostgreSQL:", gisErr.message);
+    }
 
     cacheDelPattern("feed:");
 

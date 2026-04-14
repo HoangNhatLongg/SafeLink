@@ -84,7 +84,7 @@ export default function RootLayout() {
 
     return () => {
       if (responseListener) {
-        Notifications.removeNotificationSubscription(responseListener);
+        responseListener.remove();
       }
     };
   }, [router]);
@@ -183,6 +183,12 @@ export default function RootLayout() {
           />
           <Stack.Screen
             name="followers-list"
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="saved-directory"
             options={{
               headerShown: false,
             }}

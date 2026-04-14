@@ -444,7 +444,7 @@ export default function CommentItem({
             activeOpacity={0.7}
           >
             {reactBusy ? (
-              <ActivityIndicator size={12} color="#1877f2" />
+              <ActivityIndicator size={12} color="#e53935" />
             ) : (
               <Ionicons
                 name={isLiked ? "heart" : "heart-outline"}
@@ -480,7 +480,7 @@ export default function CommentItem({
             <Ionicons
               name={showReplies ? "chevron-up" : "chevron-down"}
               size={13}
-              color="#1877f2"
+              color="#e53935"
             />
             <Text style={styles.repliesToggleText}>
               {showReplies ? "Ẩn" : `Xem ${repliesCount} trả lời`}
@@ -492,7 +492,7 @@ export default function CommentItem({
         {showReplies && (
           <View style={styles.repliesList}>
             {loadingReplies && replies.length === 0 ? (
-              <ActivityIndicator color="#1877f2" style={{ marginVertical: 8 }} />
+              <ActivityIndicator color="#e53935" style={{ marginVertical: 8 }} />
             ) : (
               <>
                 {replies.map((r) => (
@@ -512,7 +512,7 @@ export default function CommentItem({
                     disabled={loadingReplies}
                   >
                     {loadingReplies ? (
-                      <ActivityIndicator size="small" color="#1877f2" />
+                      <ActivityIndicator size="small" color="#e53935" />
                     ) : (
                       <Text style={styles.loadMoreText}>Xem thêm câu trả lời…</Text>
                     )}
@@ -551,7 +551,7 @@ const styles = StyleSheet.create({
   },
   avatarLetter: {
     fontWeight: "700",
-    color: "#1877f2",
+    color: "#e53935",
   },
   threadLine: {
     flex: 1,
@@ -591,7 +591,7 @@ const styles = StyleSheet.create({
   },
   replyToTag: {
     fontSize: 12,
-    color: "#1877f2",
+    color: "#e53935",
     fontWeight: "600",
     marginBottom: 3,
   },
@@ -640,12 +640,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 5,
     borderRadius: 14,
-    backgroundColor: "#1877f2",
+    backgroundColor: "#e53935",
     minWidth: 42,
     alignItems: "center",
   },
   editSaveBtnDisabled: {
-    backgroundColor: "#93c5fd",
+    backgroundColor: "#e53935",
   },
   editSaveText: {
     fontSize: 12,
@@ -696,7 +696,7 @@ const styles = StyleSheet.create({
   },
   repliesToggleText: {
     fontSize: 12,
-    color: "#1877f2",
+    color: "#e53935",
     fontWeight: "600",
   },
 
@@ -713,7 +713,7 @@ const styles = StyleSheet.create({
   },
   loadMoreText: {
     fontSize: 12,
-    color: "#1877f2",
+    color: "#e53935",
     fontWeight: "600",
   },
 });

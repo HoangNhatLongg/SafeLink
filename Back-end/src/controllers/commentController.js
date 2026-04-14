@@ -104,7 +104,7 @@ export const addReply = async (req, res) => {
 export const getComments = async (req, res) => {
   try {
     const { id: postId } = req.params;
-    const userId = req.user._id;
+    const userId = req.user ? req.user._id : null;
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(50, parseInt(req.query.limit) || 20);
     const skip = (page - 1) * limit;
@@ -124,11 +124,11 @@ export const getComments = async (req, res) => {
 
     // Gắn reaction của user
     const commentIds = comments.map((c) => c._id.toString());
-    const userReactions = await Like.find({
+    const userReactions = userId ? await Like.find({
       user: userId,
       target: { $in: commentIds },
       targetType: "Comment",
-    }).lean();
+    }).lean() : [];
     const reactionMap = userReactions.reduce((acc, r) => {
       acc[r.target.toString()] = r.type;
       return acc;
@@ -162,7 +162,7 @@ export const getComments = async (req, res) => {
 export const getReplies = async (req, res) => {
   try {
     const { id: parentId } = req.params;
-    const userId = req.user._id;
+    const userId = req.user ? req.user._id : null;
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(50, parseInt(req.query.limit) || 20);
     const skip = (page - 1) * limit;
@@ -185,11 +185,11 @@ export const getReplies = async (req, res) => {
     ]);
 
     const replyIds = replies.map((r) => r._id.toString());
-    const userReactions = await Like.find({
+    const userReactions = userId ? await Like.find({
       user: userId,
       target: { $in: replyIds },
       targetType: "Comment",
-    }).lean();
+    }).lean() : [];
     const reactionMap = userReactions.reduce((acc, r) => {
       acc[r.target.toString()] = r.type;
       return acc;

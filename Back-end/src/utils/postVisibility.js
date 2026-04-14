@@ -3,6 +3,7 @@ import Post from "../models/postModel.js";
 
 /** Danh sách ObjectId user mà viewer có quan hệ bạn bè (theo dõi lẫn nhau). */
 export async function getFriendAuthorIds(viewerId) {
+  if (!viewerId) return [];
   const [followingIds, followerIds] = await Promise.all([
     Follow.find({ follower: viewerId }).distinct("following"),
     Follow.find({ following: viewerId }).distinct("follower"),
@@ -12,9 +13,10 @@ export async function getFriendAuthorIds(viewerId) {
 }
 
 export function canViewerSeePost(post, viewerId, friendAuthorIds) {
-  const vid = viewerId.toString();
+  const vid = viewerId?.toString();
   const aid = (post.author?._id ?? post.author).toString();
   if (post.visibility === "public") return true;
+  if (!vid) return false;
   if (post.visibility === "private") return aid === vid;
   if (post.visibility === "friends") {
     return aid === vid || friendAuthorIds.some((id) => id.toString() === aid);
@@ -24,6 +26,7 @@ export function canViewerSeePost(post, viewerId, friendAuthorIds) {
 
 /** Điều kiện Mongo cho feed chính (mọi tác giả). */
 export function feedVisibilityMatch(viewerId, friendAuthorIds) {
+  if (!viewerId) return { visibility: "public" };
   return {
     $or: [
       { visibility: "public" },
@@ -50,13 +53,11 @@ export function authorProfileVisibilityMatch(authorIdStr, viewerIdStr, friendAut
 
 /** Bài active, chưa ẩn với viewer, và viewer được phép xem theo visibility. */
 export async function findActivePostVisibleToUser(postId, userId) {
-  const post = await Post.findOne({
-    _id: postId,
-    status: "active",
-    hiddenBy: { $nin: [userId] },
-  }).lean();
+  const query = { _id: postId, status: "active" };
+  if (userId) query.hiddenBy = { $nin: [userId] };
+  const post = await Post.findOne(query).lean();
   if (!post) return null;
-  const friendAuthorIds = await getFriendAuthorIds(userId);
+  const friendAuthorIds = userId ? await getFriendAuthorIds(userId) : [];
   if (!canViewerSeePost(post, userId, friendAuthorIds)) return null;
   return post;
 }

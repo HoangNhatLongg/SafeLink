@@ -79,3 +79,25 @@ export const logoutApi = async () => {
   const res = await apiFetch("/api/auth/logout", { method: "POST" });
   return parseJson(res);
 };
+
+export const forgotPasswordApi = async (email: string) => {
+  const response = await fetchWithTimeout(`${API_URL}/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email })
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to request password reset");
+  return data;
+};
+
+export const resetPasswordApi = async (email: string, otpCode: string, newPassword: string) => {
+  const response = await fetchWithTimeout(`${API_URL}/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, otpCode, newPassword })
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to reset password");
+  return data;
+};

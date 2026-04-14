@@ -5,19 +5,21 @@ import { mapApiPostToUi, type FeedPostUi } from "@/features/social/mapPost";
 import PostCard from "@/features/social/PostCard";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
+import { getToken } from "@/features/auth/utils/storage";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import type { PublicUser } from "@/features/user/services/userApi";
+import { Image as ExpoImage } from "expo-image";
 
 const AVATAR_SIZE = 90;
 const COVER_HEIGHT = 160;
@@ -50,6 +52,16 @@ export default function UserProfileScreen() {
     if (!id) return;
     (async () => {
       try {
+        const token = await getToken();
+        if (!token) {
+          Alert.alert("Yêu cầu đăng nhập", "Bạn cần đăng nhập để xem hồ sơ người khác.", [
+            { text: "Đóng", style: "cancel", onPress: safeBack },
+            { text: "Đăng nhập", onPress: () => router.replace("/login") }
+          ]);
+          setLoading(false);
+          return;
+        }
+
         const { user: u } = await fetchUserProfile(id);
         setUser(u);
         setFollowing(!!u.isFollowing);
@@ -64,11 +76,16 @@ export default function UserProfileScreen() {
   /* ── Load posts ── */
   useEffect(() => {
     if (!id) return;
-    setPostsLoading(true);
-    fetchUserPosts(id)
-      .then(({ posts: raw }) => setPosts(raw.map(mapApiPostToUi)))
-      .catch(() => {})
-      .finally(() => setPostsLoading(false));
+    (async () => {
+      const token = await getToken();
+      if (!token) return;
+
+      setPostsLoading(true);
+      fetchUserPosts(id)
+        .then(({ posts: raw }) => setPosts(raw.map(mapApiPostToUi)))
+        .catch(() => {})
+        .finally(() => setPostsLoading(false));
+    })();
   }, [id]);
 
   /* ── Follow / Unfollow ── */
@@ -124,7 +141,7 @@ export default function UserProfileScreen() {
       {/* Cover */}
       <View style={s.coverWrapper}>
         {user?.cover ? (
-          <Image source={{ uri: user.cover }} style={s.coverImg} />
+          <ExpoImage source={{ uri: user.cover }} style={s.coverImg} contentFit="cover" transition={200} />
         ) : (
           <LinearGradient colors={["#cbcbcbff", "#cbcbcbff"]} style={s.cover} />
         )}
@@ -134,7 +151,7 @@ export default function UserProfileScreen() {
         </TouchableOpacity>
         {/* Avatar */}
         <View style={s.avatarRing}>
-          <Image source={getAvatarSrc(user?.avatar)} style={s.avatar} />
+          <ExpoImage source={getAvatarSrc(user?.avatar)} style={s.avatar} contentFit="cover" transition={200} />
         </View>
       </View>
 
@@ -150,7 +167,7 @@ export default function UserProfileScreen() {
           disabled={followBusy}
         >
           {followBusy ? (
-            <ActivityIndicator size="small" color={following ? "#e14040ff" : "#fff"} />
+            <ActivityIndicator size="small" color={following ? "#e53935" : "#fff"} />
           ) : (
             <>
               <Ionicons
@@ -216,7 +233,7 @@ export default function UserProfileScreen() {
       {postsLoading && posts.length === 0 ? (
         <>
           <Header />
-          <ActivityIndicator style={{ marginTop: 24 }} color="#1877f2" />
+          <ActivityIndicator style={{ marginTop: 24 }} color="#e53935" />
         </>
       ) : (
         <FlatList
@@ -283,6 +300,7 @@ const s = StyleSheet.create({
     gap: 12,
   },
   name:  { fontSize: 20, fontWeight: "700", color: "#111" },
+  profileId: { color: "#888", fontSize: 13, marginTop: 2, fontFamily: Platform.OS === "ios" ? "Courier" : "monospace" },
   email: { fontSize: 13, color: "#888", marginTop: 2 },
 
   followBtn: {

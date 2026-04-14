@@ -26,7 +26,11 @@ router.post("/logout", verifyToken, logoutUser);
 /* Google login */
 router.get(
   "/google",
-  passport.authenticate("google", { scope: ["profile", "email"] })
+  (req, res, next) => {
+    const successUrl = req.query.success_url;
+    const state = successUrl ? Buffer.from(JSON.stringify({ successUrl })).toString("base64") : undefined;
+    passport.authenticate("google", { scope: ["profile", "email"], state })(req, res, next);
+  }
 );
 
 router.get(
@@ -35,7 +39,15 @@ router.get(
   async (req, res) => {
     try {
       const { token } = await issueAuthToken(req.user._id, "google");
-      const redirect = process.env.OAUTH_SUCCESS_REDIRECT;
+      
+      let redirect = process.env.OAUTH_SUCCESS_REDIRECT;
+      if (req.query.state) {
+        try {
+          const stateData = JSON.parse(Buffer.from(req.query.state, "base64").toString("utf8"));
+          if (stateData.successUrl) redirect = stateData.successUrl;
+        } catch {}
+      }
+
       if (redirect) {
         try {
           const u = new URL(redirect);
@@ -56,7 +68,11 @@ router.get(
 /* Facebook login */
 router.get(
   "/facebook",
-  passport.authenticate("facebook", { scope: ["email"] })
+  (req, res, next) => {
+    const successUrl = req.query.success_url;
+    const state = successUrl ? Buffer.from(JSON.stringify({ successUrl })).toString("base64") : undefined;
+    passport.authenticate("facebook", { scope: ["email"], state })(req, res, next);
+  }
 );
 
 router.get(
@@ -65,7 +81,15 @@ router.get(
   async (req, res) => {
     try {
       const { token } = await issueAuthToken(req.user._id, "facebook");
-      const redirect = process.env.OAUTH_SUCCESS_REDIRECT;
+      
+      let redirect = process.env.OAUTH_SUCCESS_REDIRECT;
+      if (req.query.state) {
+        try {
+          const stateData = JSON.parse(Buffer.from(req.query.state, "base64").toString("utf8"));
+          if (stateData.successUrl) redirect = stateData.successUrl;
+        } catch {}
+      }
+
       if (redirect) {
         try {
           const u = new URL(redirect);

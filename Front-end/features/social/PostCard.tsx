@@ -237,7 +237,29 @@ function PostCard({ post, onUpdated, onOpenComments, onHidden }: Props) {
   };
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, post.postType === 'sos' && styles.sosCard]}>
+      {/* Banner SOS */}
+      {post.postType === 'sos' && (() => {
+        const categoryLabel: Record<string, string> = {
+          fire:      "🔥 Hỏa hoạn",
+          landslide: "⛰️ Sạt lở",
+          traffic:   "🚗 Tai nạn giao thông",
+          robbery:   "🚨 Cướp giật",
+          medical:   "🏥 Cấp cứu y tế",
+          flood:     "🌊 Lũ lụt",
+          other:     "⚠️ Khẩn cấp",
+        };
+        const cat = post.sosCategory ? categoryLabel[post.sosCategory] : null;
+        return (
+          <View style={styles.sosBanner}>
+            <Ionicons name="warning" size={16} color="#fff" />
+            <Text style={styles.sosBannerText}>
+              🆘 TÍN HIỆU KHẨN CẤP{cat ? ` · ${cat}` : ""}
+            </Text>
+          </View>
+        );
+      })()}
+
       <View style={styles.header}>
         <TouchableOpacity onPress={openAuthorProfile} activeOpacity={0.8}>
           <ExpoImage
@@ -430,7 +452,9 @@ export default React.memo(PostCard, (prev, next) => {
     pp.shares === np.shares &&
     pp.userReaction === np.userReaction &&
     pp.isSaved === np.isSaved &&
-    pp.content === np.content
+    pp.content === np.content &&
+    pp.postType === np.postType &&
+    pp.sosCategory === np.sosCategory
   );
 });
 
@@ -463,6 +487,32 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 3,
+    overflow: 'hidden',
+  },
+  sosCard: {
+    borderWidth: 2,
+    borderColor: '#FF3B30',
+    shadowColor: '#FF3B30',
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  sosBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF3B30',
+    marginHorizontal: -14,
+    marginTop: -14,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginBottom: 10,
+    gap: 6,
+  },
+  sosBannerText: {
+    color: '#fff',
+    fontWeight: '900',
+    fontSize: 13,
+    letterSpacing: 0.5,
   },
   header: {
     flexDirection: "row",

@@ -18,20 +18,26 @@ Notifications.setNotificationHandler({
  * Đăng ký Push Token cho Expo
  * Trả về token nếu thành công, null nếu thất bại
  */
-export async function registerForPushNotificationsAsync() {
-  let token;
-
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("sos", {
-      name: "Cảnh báo SOS",
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#FF231F7C",
-      sound: "default",
-    });
+export async function registerForPushNotificationsAsync(): Promise<string | null> {
+  // Chỉ hỗ trợ thiết bị thật — simulator/emulator không có Push Token
+  if (!Device.isDevice) {
+    console.log("ℹ️ Push Notifications chỉ hoạt động trên thiết bị thật.");
+    return null;
   }
 
-  if (Device.isDevice) {
+  try {
+    // Tạo notification channel cho Android
+    if (Platform.OS === "android") {
+      await Notifications.setNotificationChannelAsync("sos", {
+        name: "Cảnh báo SOS",
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: "#FF231F7C",
+        sound: "default",
+      });
+    }
+
+    // Xin quyền
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
     if (existingStatus !== "granted") {
@@ -39,26 +45,24 @@ export async function registerForPushNotificationsAsync() {
       finalStatus = status;
     }
     if (finalStatus !== "granted") {
-      console.warn("❌ Failed to get push token for push notification!");
+      console.warn("⚠️ Quyền Push Notification bị từ chối.");
       return null;
     }
 
-    // Lấy project ID từ app config
+    // Lấy project ID từ app config (cần cho Expo Go / production)
     const projectId =
       Constants?.expoConfig?.extra?.eas?.projectId ??
-      Constants?.easConfig?.projectId;
+      (Constants as any)?.easConfig?.projectId;
 
-    try {
-      token = (await Notifications.getExpoPushTokenAsync({
-        projectId,
-      })).data;
-      console.log("📲 Expo Push Token:", token);
-    } catch (e: any) {
-      console.error("❌ Error getting Expo Push Token:", e.message);
-    }
-  } else {
-    console.log("ℹ️ Must use physical device for Push Notifications");
+    const tokenData = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined
+    );
+    const token = tokenData.data;
+    console.log("📲 Expo Push Token:", token);
+    return token;
+  } catch (e: any) {
+    // Không crash app — chỉ warn (thường xảy ra trên Expo Go chưa đăng nhập)
+    console.warn("⚠️ Không lấy được Push Token:", e.message);
+    return null;
   }
-
-  return token;
 }

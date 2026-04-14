@@ -125,6 +125,16 @@ export default function PostDetailScreen() {
   const onSend = async () => {
     const t = text.trim();
     if (!t) return;
+    
+    const token = await getToken();
+    if (!token) {
+      Alert.alert("Yêu cầu đăng nhập", "Bạn cần đăng nhập để bình luận.", [
+        { text: "Bỏ qua", style: "cancel" },
+        { text: "Đăng nhập", onPress: () => router.push("/login") },
+      ]);
+      return;
+    }
+
     setSending(true);
     try {
       if (replyTarget) {
@@ -179,7 +189,7 @@ export default function PostDetailScreen() {
   if (loading || !postUi) {
     return (
       <SafeAreaView style={styles.center} edges={["top", "left", "right"]}>
-        <ActivityIndicator size="large" color="#1877f2" />
+        <ActivityIndicator size="large" color="#e53935" />
         <Text style={styles.loadingText}>Đang tải bài viết…</Text>
       </SafeAreaView>
     );
@@ -240,11 +250,11 @@ export default function PostDetailScreen() {
           }
           ListFooterComponent={
             loadingMore ? (
-              <ActivityIndicator color="#1877f2" style={{ marginVertical: 12 }} />
+              <ActivityIndicator color="#e53935" style={{ marginVertical: 12 }} />
             ) : hasMore ? (
               <TouchableOpacity style={styles.loadMoreBtn} onPress={loadMore}>
                 <Text style={styles.loadMoreText}>Xem thêm bình luận</Text>
-                <Ionicons name="chevron-down" size={14} color="#1877f2" />
+                <Ionicons name="chevron-down" size={14} color="#e53935" />
               </TouchableOpacity>
             ) : null
           }
@@ -258,7 +268,7 @@ export default function PostDetailScreen() {
           {/* Chip hiển thị reply target */}
           {replyTarget && (
             <View style={styles.replyChip}>
-              <Ionicons name="return-down-forward" size={13} color="#1877f2" />
+              <Ionicons name="return-down-forward" size={13} color="#e53935" />
               <Text style={styles.replyChipText} numberOfLines={1}>
                 Đang trả lời{" "}
                 <Text style={styles.replyChipName}>@{replyTarget.replyToName}</Text>
@@ -335,7 +345,7 @@ const styles = StyleSheet.create({
     color: "#1e293b",
   },
   countBadge: {
-    backgroundColor: "#1877f2",
+    backgroundColor: "#e53935",
     borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -357,7 +367,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 10,
   },
-  loadMoreText: { fontSize: 13, color: "#1877f2", fontWeight: "600" },
+  loadMoreText: { fontSize: 13, color: "#e53935", fontWeight: "600" },
 
   // Compose wrapper (chứa chip + input bar)
   composeWrapper: {
@@ -387,7 +397,7 @@ const styles = StyleSheet.create({
   },
   replyChipName: {
     fontWeight: "700",
-    color: "#1877f2",
+    color: "#e53935",
   },
 
   // Input row
@@ -411,20 +421,20 @@ const styles = StyleSheet.create({
     color: "#1e293b",
   },
   sendBtn: {
-    backgroundColor: "#1877f2",
+    backgroundColor: "#e53935",
     width: 42,
     height: 42,
     borderRadius: 21,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#1877f2",
+    shadowColor: "#e53935",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.35,
     shadowRadius: 4,
     elevation: 3,
   },
   sendBtnDisabled: {
-    backgroundColor: "#93c5fd",
+    backgroundColor: "#f08987ff",
     shadowOpacity: 0,
     elevation: 0,
   },

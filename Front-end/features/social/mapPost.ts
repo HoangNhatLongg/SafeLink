@@ -22,7 +22,10 @@ export type FeedPostUi = {
   isSaved: boolean;
   visibility?: string;
   postType?: "normal" | "sos";
+  /** Category của SOS (chỉ có khi postType === 'sos') */
+  sosCategory?: string;
 };
+
 
 function formatRelative(iso?: string): string {
   if (!iso) return "";
@@ -103,5 +106,6 @@ export function mapApiPostToUi(p: any): FeedPostUi {
     isSaved: !!p.isSaved,
     visibility: p.visibility,
     postType: p.postType,
+    sosCategory: p.sosCategory,
   };
 }

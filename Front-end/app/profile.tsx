@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { clearSession, saveUserJson } from "@/features/auth/utils/storage";
+import { clearSession, saveUserJson, getToken } from "@/features/auth/utils/storage";
 import {
   fetchMe,
   fetchUserPosts,
@@ -19,7 +19,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -33,6 +32,7 @@ import {
   Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Image as ExpoImage } from "expo-image";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const AVATAR_SIZE = 90;
@@ -62,6 +62,12 @@ export default function ProfileScreen() {
   /* ── Load profile ─────────────────────────── */
   const loadMe = useCallback(async () => {
     try {
+      const token = await getToken();
+      if (!token) {
+        setMe(null);
+        setLoading(false);
+        return;
+      }
       const { user } = await fetchMe();
       setMe(user);
     } catch (e: any) {
@@ -155,13 +161,22 @@ export default function ProfileScreen() {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const uri = result.assets[0].uri;
-        const ext = uri.substring(uri.lastIndexOf(".") + 1) || "jpg";
+        const asset = result.assets[0];
+        const uri = asset.uri;
+        
+        let mimeType = asset.mimeType || "image/jpeg";
+        let ext = "jpg";
+        if (asset.fileName && asset.fileName.includes(".")) {
+          ext = asset.fileName.split(".").pop() || "jpg";
+        } else if (mimeType && mimeType.includes("/")) {
+          ext = mimeType.split("/")[1];
+        }
+
         const formData = new FormData();
         formData.append("cover", {
           uri,
-          name: `cover.${ext}`,
-          type: `image/${ext === "jpg" ? "jpeg" : ext}`,
+          name: asset.fileName || `cover.${ext}`,
+          type: mimeType,
         } as any);
 
         const { cover } = await uploadCoverForm(formData);
@@ -178,7 +193,7 @@ export default function ProfileScreen() {
       {/* Cover Image */}
       <View style={s.coverWrap}>
         {me?.cover ? (
-          <Image source={{ uri: me.cover }} style={s.coverImg} />
+          <ExpoImage source={{ uri: me.cover }} style={s.coverImg} contentFit="cover" transition={200} />
         ) : (
           <View style={s.coverPlaceholder} />
         )}
@@ -195,7 +210,7 @@ export default function ProfileScreen() {
       </View>
 
       <View style={s.avatarWrapper}>
-        <Image source={getAvatarSrc(me?.avatar)} style={s.avatar} />
+        <ExpoImage source={getAvatarSrc(me?.avatar)} style={s.avatar} contentFit="cover" transition={200} />
       </View>
 
       {/* Name + role */}
@@ -207,6 +222,8 @@ export default function ProfileScreen() {
           </View>
         )}
       </View>
+
+      <Text style={s.profileId}>ID: {me?.id || "..."}</Text>
 
       {/* Bio */}
       {me?.profile?.bio ? <Text style={s.bio}>{me.profile.bio}</Text> : null}
@@ -265,7 +282,25 @@ export default function ProfileScreen() {
   if (loading) {
     return (
       <SafeAreaView style={s.center}>
-        <ActivityIndicator size="large" color="#1877f2" />
+        <ActivityIndicator size="large" color="#e53935" />
+      </SafeAreaView>
+    );
+  }
+
+  if (!me) {
+    return (
+      <SafeAreaView style={s.center} edges={["top"]}>
+        <Ionicons name="person-circle-outline" size={80} color="#ccc" style={{ marginBottom: 16 }} />
+        <Text style={{ fontSize: 18, color: "#333", fontWeight: "600", marginBottom: 8 }}>Chưa đăng nhập</Text>
+        <Text style={{ fontSize: 14, color: "#666", textAlign: "center", marginHorizontal: 32, marginBottom: 24 }}>
+          Bạn cần đăng nhập để xem thông tin, chỉnh sửa hồ sơ và xem các bài viết của mình.
+        </Text>
+        <TouchableOpacity
+          style={{ backgroundColor: "#e53935", paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 }}
+          onPress={() => router.push("/login")}
+        >
+          <Text style={{ color: "#fff", fontWeight: "600", fontSize: 16 }}>Đăng nhập ngay</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -290,7 +325,7 @@ export default function ProfileScreen() {
         contentContainerStyle={{ padding: 10, paddingBottom: 60 }}
         ListEmptyComponent={
           currentLoading ? (
-            <ActivityIndicator style={{ marginTop: 30 }} color="#1877f2" />
+            <ActivityIndicator style={{ marginTop: 30 }} color="#e53935" />
           ) : (
             <Text style={s.empty}>
               {activeTab === TAB_MY ? "Chưa có bài viết nào." : "Chưa có bài viết đã lưu."}
@@ -382,7 +417,18 @@ function EditProfileModal({
       }
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setAvatarLocal(result.assets[0].uri);
+        const asset = result.assets[0];
+        let mimeType = asset.mimeType || "image/jpeg";
+        let ext = "jpg";
+        if (asset.fileName && asset.fileName.includes(".")) {
+          ext = asset.fileName.split(".").pop() || "jpg";
+        } else if (mimeType && mimeType.includes("/")) {
+          ext = mimeType.split("/")[1];
+        }
+
+        setAvatarLocal(asset.uri);
+        // Lưu metadata kèm URI để khi 'save()' gọi, ta có đủ mimeType
+        (user as any)._tempAvatarMeta = { mimeType, fileName: asset.fileName || `avatar.${ext}` };
       }
     } catch (e: any) {
       Alert.alert('Lỗi', e.message);
@@ -401,12 +447,15 @@ function EditProfileModal({
     setSaving(true);
     try {
       if (avatarLocal) {
-        const ext = avatarLocal.substring(avatarLocal.lastIndexOf(".") + 1) || "jpg";
+        const meta = (user as any)._tempAvatarMeta || {};
+        const mimeType = meta.mimeType || "image/jpeg";
+        const fileName = meta.fileName || "avatar.jpg";
+        
         const formData = new FormData();
         formData.append("avatar", {
           uri: avatarLocal,
-          name: `avatar.${ext}`,
-          type: `image/${ext === "jpg" ? "jpeg" : ext}`,
+          name: fileName,
+          type: mimeType,
         } as any);
         await uploadAvatarForm(formData); 
       }
@@ -489,9 +538,11 @@ function EditProfileModal({
             {/* Avatar preview & change */}
             <View style={m.avatarSection}>
               <View style={m.avatarPreviewRing}>
-                <Image 
+                <ExpoImage 
                   source={getAvatarSrc(avatarLocal || user.avatar)} 
                   style={m.avatarPreview} 
+                  contentFit="cover"
+                  transition={200}
                 />
                 <TouchableOpacity style={m.changeAvatarBtn} onPress={triggerImagePicker}>
                   <Ionicons name="camera" size={18} color="#fff" />
@@ -587,6 +638,7 @@ const s = StyleSheet.create({
     borderRadius: 10,
   },
   roleText: { color: "#fff", fontSize: 11, fontWeight: "600" },
+  profileId: { textAlign: "center", color: "#888", fontSize: 13, marginTop: -6, marginBottom: 10, fontFamily: Platform.OS === "ios" ? "Courier" : "monospace" },
 
   bio: { marginHorizontal: 20, marginBottom: 8, textAlign: "center", color: "#555", fontSize: 14, lineHeight: 20 },
 

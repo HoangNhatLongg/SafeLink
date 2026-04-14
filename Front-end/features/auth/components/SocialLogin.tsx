@@ -27,7 +27,7 @@ export default function SocialLogin() {
   const runOAuth = async (provider: "google" | "facebook") => {
     setBusy(provider);
     try {
-      const authUrl = `${API_BASE}/api/auth/${provider}`;
+      const authUrl = `${API_BASE}/api/auth/${provider}?success_url=${encodeURIComponent(redirectUri)}`;
       const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
 
       if (result.type === "success" && result.url) {

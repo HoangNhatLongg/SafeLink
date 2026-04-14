@@ -1,5 +1,5 @@
 import express from "express";
-import { verifyToken } from "../middleware/authMiddleware.js";
+import { verifyToken, optionalAuth } from "../middleware/authMiddleware.js";
 import { uploadPostMedia } from "../middleware/upload.js";
 import {
   createPost,
@@ -24,9 +24,6 @@ import {
 
 const router = express.Router();
 
-// Tất cả routes đều yêu cầu xác thực
-router.use(verifyToken);
-
 /** Multer trả lỗi rõ (400) thay vì 500 khi sai MIME / file quá lớn */
 const uploadPostMiddleware = (req, res, next) => {
   uploadPostMedia(req, res, (err) => {
@@ -40,38 +37,27 @@ const uploadPostMiddleware = (req, res, next) => {
 };
 
 // ─────────── Bài viết ───────────
-// Feed & tạo bài
-router.get("/", getFeed);
+// Các route công cộng (có thể không đăng nhập)
+router.get("/", optionalAuth, getFeed);
+router.get("/nearby", optionalAuth, getNearbyPosts);
+router.get("/recommended", optionalAuth, getRecommendedFeed);
+router.get("/:id", optionalAuth, getPostById);
+router.get("/:id/comments", optionalAuth, getComments);
+
+// Các route yêu cầu đăng nhập
+router.use(verifyToken);
+
 router.post("/", uploadPostMiddleware, createPost);
-
-// Bài viết đã lưu
 router.get("/saved", getSavedPosts);
-
-// Bài viết theo vị trí (PostGIS)
-router.get("/nearby", getNearbyPosts);
-
-// Feed đề xuất thông minh (5 tầng ưu tiên)
-router.get("/recommended", getRecommendedFeed);
-
-// Chi tiết, sửa, xóa
-router.get("/:id", getPostById);
 router.put("/:id", uploadPostMiddleware, updatePost);
 router.delete("/:id", deletePost);
-
-// Phản ứng
 router.post("/:id/like", likePost);
 router.post("/:id/dislike", dislikePost);
-
-// Lưu / Ẩn / Chia sẻ
 router.post("/:id/save", toggleSavePost);
 router.post("/:id/hide", toggleHidePost);
 router.post("/:id/share", sharePost);
-
-// Báo cáo
 router.post("/:id/report", reportPost);
-
-// Bình luận của bài viết
-router.get("/:id/comments", getComments);
 router.post("/:id/comments", addComment);
 
 export default router;
+

@@ -56,16 +56,36 @@ export default function MenuTab() {
           onPress={() => router.push("/nearby")}
         />
         <MenuRow
-          icon="log-out-outline"
-          label="Đăng xuất"
-          onPress={logout}
+          icon="book-outline"
+          label="Danh bạ đã lưu (Offline)"
+          onPress={() => router.push("/saved-directory")}
         />
-        {["moderator", "admin"].includes(me?.role || "") ? (
+        {me ? (
           <MenuRow
-            icon="shield-checkmark-outline"
-            label="Duyệt báo cáo"
-            onPress={() => router.push("/moderation")}
+            icon="log-out-outline"
+            label="Đăng xuất"
+            onPress={logout}
           />
+        ) : (
+          <MenuRow
+            icon="log-in-outline"
+            label="Đăng nhập / Đăng ký"
+            onPress={() => router.push("/login")}
+          />
+        )}
+        {["moderator", "admin"].includes(me?.role || "") ? (
+          <>
+            <MenuRow
+              icon="shield-checkmark-outline"
+              label="Duyệt báo cáo bài viết"
+              onPress={() => router.push("/moderation")}
+            />
+            <MenuRow
+              icon="book-outline"
+              label="Duyệt đóng góp danh bạ"
+              onPress={() => router.push("/directory-moderation")}
+            />
+          </>
         ) : null}
       </ScrollView>
     </SafeAreaView>
@@ -83,7 +103,7 @@ function MenuRow({
 }) {
   return (
     <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
-      <Ionicons name={icon} size={22} color="#1877f2" />
+      <Ionicons name={icon} size={22} color="#FF3B30" />
       <Text style={styles.rowLabel}>{label}</Text>
       <Ionicons name="chevron-forward" size={20} color="#ccc" />
     </TouchableOpacity>
@@ -93,7 +113,7 @@ function MenuRow({
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#f2f3f5" },
-  wrap: { padding: 16, paddingBottom: 32 },
+  wrap: { padding: 16, paddingBottom: 32, marginTop: 30, },
   title: { fontSize: 22, fontWeight: "700", marginBottom: 4 },
   sub: { color: "#666", marginBottom: 20 },
   row: {

@@ -72,25 +72,25 @@ export default function SocialScreen() {
       (async () => {
         const token = await getToken();
         if (!alive) return;
-        if (!token) {
-          router.replace("/login");
-          return;
-        }
-        const local = await getUserJson();
-        setMe(local);
-        try {
-          const { user } = await fetchMe();
-          const next: StoredUser = {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            avatar: user.avatar,
-            role: user.role,
-          };
-          await saveUserJson(next);
-          if (alive) setMe(next);
-        } catch {
-          /* giữ cache */
+        if (token) {
+          const local = await getUserJson();
+          setMe(local);
+          try {
+            const { user } = await fetchMe();
+            const next: StoredUser = {
+              id: user.id,
+              email: user.email,
+              name: user.name,
+              avatar: user.avatar,
+              role: user.role,
+            };
+            await saveUserJson(next);
+            if (alive) setMe(next);
+          } catch {
+            /* giữ cache */
+          }
+        } else {
+          setMe(null);
         }
 
         if (!initialFeedLoaded.current) {
@@ -164,7 +164,7 @@ export default function SocialScreen() {
 
       {loading && posts.length === 0 ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#1877f2" />
+          <ActivityIndicator size="large" color="#e53935" />
           <Text style={styles.hint}>Đang tải bảng tin…</Text>
         </View>
       ) : (
@@ -193,7 +193,17 @@ export default function SocialScreen() {
       )}
 
       {/* Nút SOS nổi (có thể kéo thả) */}
-      <SOSButton onPress={() => setSosVisible(true)} />
+      <SOSButton onPress={async () => {
+        const token = await getToken();
+        if (!token) {
+          Alert.alert("Yêu cầu đăng nhập", "Bạn cần đăng nhập để gửi tín hiệu SOS.", [
+            { text: "Bỏ qua", style: "cancel" },
+            { text: "Đăng nhập", onPress: () => router.push("/login") },
+          ]);
+          return;
+        }
+        setSosVisible(true);
+      }} />
 
       {/* Modal gửi SOS */}
       <SOSModal 

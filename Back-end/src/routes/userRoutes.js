@@ -21,7 +21,7 @@ router.post("/me/cover", verifyToken, uploadCoverMedia, updateCover);
 // Suggest users to follow
 router.get("/suggestions", verifyToken, getSuggestedUsers);
 
-// Xem profile người khác (auth optional — để biết isFollowing)
-router.get("/:id/profile", optionalAuth, getUserProfile);
+// Xem profile người khác (yêu cầu đăng nhập)
+router.get("/:id/profile", verifyToken, getUserProfile);
 
 export default router;

@@ -1,6 +1,6 @@
 # AI CONTEXT — SafeLink Project
 
-> Cập nhật: 2026-04-10
+> Cập nhật: 2026-04-14
 > Mục đích: Cung cấp ngữ cảnh đầy đủ cho AI assistant khi làm việc với dự án này.
 
 ---
@@ -64,7 +64,8 @@ SafeLink/
 │   │   │   ├── followModel.js
 │   │   │   ├── reportModel.js
 │   │   │   ├── otpModel.js
-│   │   │   └── authTokenModel.js
+│   │   │   ├── authTokenModel.js
+│   │   │   └── directoryModel.js  # Danh bạ khẩn cấp (Haversine, status: active|pending|rejected)
 │   │   ├── controllers/
 │   │   │   ├── authController.js
 │   │   │   ├── postController.js   # CRUD, like, dislike, save, hide, share, report, feed, nearby, recommended
@@ -72,7 +73,8 @@ SafeLink/
 │   │   │   ├── followController.js
 │   │   │   ├── userController.js   # Profile, avatar, cover, suggestions
 │   │   │   ├── moderationController.js
-│   │   │   └── searchController.js
+│   │   │   ├── searchController.js
+│   │   │   └── directoryController.js  # Directory CRUD + Haversine nearby + review
 │   │   ├── routes/
 │   │   │   ├── authRoutes.js       # /api/auth
 │   │   │   ├── postRoutes.js       # /api/posts
@@ -80,7 +82,8 @@ SafeLink/
 │   │   │   ├── followRoutes.js     # /api/users/:id/follow|followers|following
 │   │   │   ├── userRoutes.js       # /api/users
 │   │   │   ├── moderationRoutes.js # /api/moderation
-│   │   │   └── searchRoutes.js     # /api/search
+│   │   │   ├── searchRoutes.js     # /api/search
+│   │   │   └── directoryRoutes.js  # /api/directory
 │   │   ├── middleware/
 │   │   │   ├── authMiddleware.js   # verifyToken, optionalAuth
 │   │   │   ├── roleMiddleware.js   # requireRole (moderator/admin)
@@ -115,6 +118,8 @@ SafeLink/
 │   │   ├── saved-posts.tsx        # Bài đã lưu
 │   │   ├── nearby.tsx             # Bài viết gần vị trí (PostGIS)
 │   │   ├── moderation.tsx         # Báo cáo vi phạm
+│   │   ├── directory-moderation.tsx # Admin duyệt đóng góp danh bạ
+│   │   ├── saved-directory.tsx    # Quản lý danh bạ đã lưu offline
 │   │   ├── privacy.tsx            # Cài đặt quyền riêng tư
 │   │   ├── login.tsx / register.tsx
 │   │   └── oauth.tsx              # OAuth callback handler
@@ -145,6 +150,15 @@ SafeLink/
 │   │   │   └── services/userApi.ts
 │   │   ├── moderation/
 │   │   ├── emergency/
+│   │   │   ├── AgencyCard.tsx     # Card đơn vị (call, bookmark, directions)
+│   │   │   ├── FilterBar.tsx      # Bộ lọc mode/search/type/province
+│   │   │   ├── MapSection.tsx     # Bản đồ với Callout 220px cố định
+│   │   │   ├── ContributeModal.tsx# Form đóng góp
+│   │   │   ├── directoryApi.ts    # API calls (timeout 8s, fetchWithTimeout)
+│   │   │   ├── offlineStorage.ts  # AsyncStorage: saved + cache
+│   │   │   ├── agencyData.ts      # 25 built-in fallback entries (SĐT thật)
+│   │   │   ├── locationService.ts # expo-location GPS
+│   │   │   └── types.ts           # Agency, AgencyType, ContributePayload
 │   │   └── SOS/
 │   │       ├── MapSection.tsx
 │   │       ├── agencyData.ts
@@ -239,6 +253,20 @@ address TEXT, created_at TIMESTAMPTZ
 -- Index: GIST(location) cho ST_DWithin
 ```
 
+### Directory (MongoDB)
+```js
+{
+  name, phone, address (required),
+  province (required), district, ward,
+  type: 'csgt|pccc|canh_sat|benh_vien|cuu_thuong|khac',
+  lat, lng (required),
+  status: 'active|pending|rejected',  // default: 'active'
+  note, addedBy (ref User),
+  timestamps
+}
+// Không dùng GeoJSON — tính khoảng cách bằng Haversine trong controller
+```
+
 ---
 
 ## 5. API ENDPOINTS
@@ -301,6 +329,15 @@ address TEXT, created_at TIMESTAMPTZ
 
 ### Moderation — `/api/moderation` (Moderator/Admin)
 - Quản lý báo cáo, duyệt/từ chối bài viết
+
+### Directory — `/api/directory` (Public / Moderator)
+| Method | Path | Mô tả | Auth |
+|--------|------|-------|------|
+| GET | `/` | Danh sách (params: province, district, type, search, page, limit) | Không |
+| GET | `/nearby` | Gần vị trí Haversine (params: lat, lng, radius=5km) | Không |
+| POST | `/contribute` | Đóng góp mới (status=pending) | Optional JWT |
+| GET | `/pending` | Danh sách chờ duyệt | Moderator |
+| PATCH | `/:id/review` | Duyệt/Từ chối (body: action, rejectReason) | Moderator |
 
 ---
 
@@ -409,23 +446,42 @@ fetchTagSuggestions(q)
 
 ### Navigation (Expo Router file-based)
 ```
-(tabs)/index       → Home Feed
-(tabs)/sos         → SOS
-(tabs)/directory   → Danh bạ
-(tabs)/skills      → Kỹ năng
-(tabs)/menu        → Menu
-create-post        → Tạo bài viết (stack modal)
-post/[id]          → Chi tiết bài
-user/[id]          → Profile người dùng
-profile            → Profile của tôi
-search             → Tìm kiếm toàn cục
-saved-posts        → Bài đã lưu
-nearby             → Bài viết gần đây
-followers-list     → Followers/Following
-moderation         → Báo cáo
-privacy            → Quyền riêng tư
-auth/verify-otp    → OTP xác thực
-oauth              → OAuth callback
+(tabs)/index             → Home Feed
+(tabs)/sos               → SOS
+(tabs)/directory         → Danh bạ khẩn cấp
+(tabs)/skills            → Kỹ năng
+(tabs)/menu              → Menu
+create-post              → Tạo bài viết (stack modal)
+post/[id]                → Chi tiết bài
+user/[id]                → Profile người dùng
+profile                  → Profile của tôi
+search                   → Tìm kiếm toàn cục
+saved-posts              → Bài đã lưu
+saved-directory          → Danh bạ đã lưu (offline)
+nearby                   → Bài viết gần đây
+followers-list           → Followers/Following
+moderation               → Duyệt báo cáo bài viết
+directory-moderation     → Duyệt đóng góp danh bạ (Moderator)
+privacy                  → Quyền riêng tư
+auth/verify-otp          → OTP xác thực
+oauth                    → OAuth callback
+```
+
+### Directory API (`features/emergency/directoryApi.ts`)
+```ts
+fetchDirectory({ province?, district?, type?, search?, page?, limit? })
+// → dùng fetchWithTimeout (8s) thay vì apiFetch
+fetchNearbyDirectory({ lat, lng, radius?, type? })
+contributeDirectory(payload: ContributePayload)
+fetchPendingDirectory()                          // Moderator
+reviewDirectoryItem(id, action, rejectReason?)   // Moderator
+```
+
+### Offline Storage (`features/emergency/offlineStorage.ts`)
+```ts
+saveAgency(agency) / removeAgency(id) / getSavedAgencies()
+isAgencySaved(id) / clearAllSavedAgencies()
+cacheDirectoryData(items) / getCachedDirectory() / isCacheValid(cache)
 ```
 
 ---
@@ -458,9 +514,9 @@ OAUTH_SUCCESS_REDIRECT=...
 ## 11. TRẠNG THÁI HIỆN TẠI
 
 ### Đã hoàn thành ✅
-- Hệ thống Auth: đăng ký/đăng nhập OTP, Google/Facebook OAuth, JWT whitelist, 2FA thiết bị lạ
+- Hệ thống Auth: đăng ký/đăng nhập OTP, Google/Facebook OAuth, JWT whitelist, 2FA thiết bị lạ, Quên mật khẩu
 - CRUD bài viết (text + ảnh + video), hỗ trợ ảnh/video đồng thời
-- PostCard: like, dislike, save, hide, share, report, comments
+- PostCard: like, dislike, save, hide, share, report, comments (like + reply)
 - Feed phân trang (infinite scroll)
 - Feed đề xuất 5 tầng (SOS → Friends → Nearby → TopScore → Remaining)
 - Bài viết theo vị trí (PostGIS ST_DWithin)
@@ -469,21 +525,34 @@ OAUTH_SUCCESS_REDIRECT=...
 - Gợi ý hashtag (tag suggestions)
 - Profile người dùng: xem, sửa, avatar, cover, privacy settings
 - Trang bài viết đã lưu
-- Kiểm duyệt (Moderation): duyệt/từ chối báo cáo
+- Kiểm duyệt (Moderation): duyệt/từ chối báo cáo bài viết
 - Video upload với timeout 5 phút
 - Camera capture trực tiếp khi tạo bài
 - i18n (Tiếng Việt)
+- **Danh bạ khẩn cấp (Directory)** — tải từ API, filter local, offline cache, bookmark, bản đồ, đóng góp, admin duyệt
+  - 3 nguồn dữ liệu: MongoDB API → AsyncStorage cache → Built-in 25 entries
+  - Filter client-side: type chip + search bar (không gọi API lại)
+  - Callout bản đồ: width 220px cố định (fix clipped bug)
+  - Màn hình quản lý danh bạ đã lưu (`/saved-directory`)
+  - Màn hình duyệt đóng góp cho Moderator (`/directory-moderation`)
+- **SOS Khẩn cấp** — gửi tín hiệu SOS kèm GPS, ảnh, phân loại sự cố; bản đồ realtime; push notification
+  - Nút SOS nổi (draggable), ấn giữ → SOSModal (form phân loại + ảnh)
+  - Bản đồ SOSMap: hiển thị marker SOS active trong bán kính, cập nhật 30s/lần
+  - Ấn marker → Bottom Panel: xem bài viết / chỉ đường Google Maps
+  - PostCard: banner "🆘 TÍN HIỆU KHẨN CẤP · [loại sự cố]" cho bài SOS
+  - Backend: tự hết hạn sau 24h, Haversine notify users lân cận, ưu tiên đầu feed
+  - Phân loại: 🔥 Hỏa hoạn, ⛰️ Sạt lở, 🚗 Tai nạn, 🚨 Cướp giật, 🏥 Y tế, 🌊 Lũ lụt, ⚠️ Khác
+  - Tài liệu chi tiết: `Context/SOS_Technical_Doc.md`
 
 ### Chưa hoàn thành / Đang phát triển 🔧
-- Module SOS (gửi tín hiệu khẩn cấp thời gian thực)
 - Thư viện kỹ năng sơ cấp cứu (Tab Skills)
-- Danh bạ cứu hộ (Tab Directory — dữ liệu tĩnh hiện tại)
 - Push Notification (chưa tích hợp FCM/APNS)
 - Admin Web (chưa xây dựng)
 - Rate limiting API
 - WebSocket / Realtime notifications
 - AI phân loại nội dung
 - Production deployment
+- Directory: seed thêm dữ liệu thật vào MongoDB
 
 ---
 
@@ -496,3 +565,13 @@ OAUTH_SUCCESS_REDIRECT=...
 5. **AI phân loại** — Tự động detect bài vi phạm
 6. **Rate Limit** — Express rate-limiter
 7. **Production** — Docker, CI/CD, nginx, HTTPS
+---
+
+## 13. LƯU Ý QUAN TRỌNG
+
+- Backend dùng `npm start` (node thường, **KHÔNG có hot reload**). Sau khi sửa code backend **PHẢI restart** server. Dùng `npm run dev` (nodemon) trong development.
+- `directoryApi.ts` dùng `fetchWithTimeout` (raw fetch + 8s timeout), **KHÔNG** dùng `apiFetch` — vì directory là public API, không cần Bearer token.
+- Filter theo `type` trong directory là **client-side** hoàn toàn, không gọi API lại.
+- Callout trong `react-native-maps` **phải** có `width` cố định (không dùng `tooltip` prop) để tránh bị clipped.
+- Banner "dữ liệu cũ" chỉ hiện khi có cache > 1 giờ. Mock/built-in data không kích hoạt banner.
+- AI_Context.md có file chi tiết kỹ thuật ở `Context/Directory_Technical_Doc.md`.

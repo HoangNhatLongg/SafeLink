@@ -93,7 +93,7 @@ export default function SOSModal({ visible, onClose, onSuccess }: SOSModalProps)
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'] as any,
       allowsMultipleSelection: true,
       quality: 0.7,
     });

@@ -1,72 +1,93 @@
-import axios from "axios";
-import { API_URL } from "@/constants/api";
-import { getAuthToken } from "@/features/auth/utils/storage";
+import { apiFetch, parseJson } from "@/features/api/http";
 
-/**
- * Lấy danh sách SOS đang hoạt động cho bản đồ
- */
-export async function fetchActiveSOS(params?: { lat?: number; lon?: number; radius?: number }) {
-  try {
-    const response = await axios.get(`${API_URL}/sos/active`, { params });
-    return response.data;
-  } catch (err: any) {
-    throw new Error(err.response?.data?.message || "Không thể tải dữ liệu SOS.");
-  }
+/** Shape của 1 SOS item trả về từ GET /api/sos/active */
+export interface SOSItem {
+  id: string;
+  author: { _id: string; name: string; avatar?: string };
+  category: string;
+  description: string;
+  images: { url: string }[];
+  location: { latitude: number; longitude: number; address?: string };
+  radius: number;
+  sosStatus: "active" | "resolved";
+  expiresAt: string;
+  createdAt: string;
 }
 
 /**
- * Gửi tín hiệu SOS mới
+ * Lấy danh sách SOS đang hoạt động cho bản đồ
+ * Không cần token (endpoint public)
+ */
+export async function fetchActiveSOS(params?: {
+  lat?: number;
+  lon?: number;
+  radius?: number;
+}) {
+  const q = new URLSearchParams();
+  if (params?.lat !== undefined) q.set("lat", String(params.lat));
+  if (params?.lon !== undefined) q.set("lon", String(params.lon));
+  if (params?.radius !== undefined) q.set("radius", String(params.radius));
+
+  const qs = q.toString() ? `?${q.toString()}` : "";
+  // skipAuth = true vì đây là endpoint public
+  const res = await apiFetch(`/api/sos/active${qs}`, {}, true);
+  return parseJson<{ sos: SOSItem[] }>(res);
+}
+
+/**
+ * Gửi tín hiệu SOS mới (yêu cầu đăng nhập)
  */
 export async function createSOS(formData: FormData) {
-  try {
-    const token = await getAuthToken();
-    const response = await axios.post(`${API_URL}/sos`, formData, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "multipart/form-data",
-      },
-    });
-    return response.data;
-  } catch (err: any) {
-    throw new Error(err.response?.data?.message || "Không thể gửi tín hiệu SOS.");
-  }
+  const res = await apiFetch("/api/sos", { method: "POST", body: formData });
+  return parseJson<{
+    message: string;
+    post: SOSItem;
+    notified: { nearby: number; staff: number };
+  }>(res);
 }
 
 /**
  * Đánh dấu SOS đã được giải quyết
  */
 export async function resolveSOS(id: string) {
-  try {
-    const token = await getAuthToken();
-    const response = await axios.patch(`${API_URL}/sos/${id}/resolve`, {}, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return response.data;
-  } catch (err: any) {
-    throw new Error(err.response?.data?.message || "Không thể đóng SOS này.");
-  }
+  const res = await apiFetch(`/api/sos/${id}/resolve`, {
+    method: "PATCH",
+    body: JSON.stringify({}),
+  });
+  return parseJson<{ message: string; sosStatus: string }>(res);
 }
 
 /**
  * Cập nhật vị trí hiện tại của user để nhận alerts chính xác
+ * Silent — không throw lỗi để không ảnh hưởng trải nghiệm
  */
-export async function updateLocation(latitude: number, longitude: number) {
+export async function updateLocation(
+  latitude: number,
+  longitude: number
+): Promise<void> {
   try {
-    const token = await getAuthToken();
-    await axios.patch(`${API_URL}/sos/me/location`, { latitude, longitude }, {
-      headers: { Authorization: `Bearer ${token}` },
+    const res = await apiFetch("/api/sos/me/location", {
+      method: "PATCH",
+      body: JSON.stringify({ latitude, longitude }),
     });
-  } catch {/* silent */}
+    await parseJson(res);
+  } catch {
+    /* silent — không critical */
+  }
 }
 
 /**
- * Lưu Push Token của thiết bị lên server
+ * Lưu Expo Push Token của thiết bị lên server
+ * Silent — không throw lỗi
  */
-export async function uploadPushToken(token: string) {
+export async function uploadPushToken(token: string): Promise<void> {
   try {
-    const authToken = await getAuthToken();
-    await axios.patch(`${API_URL}/sos/me/push-token`, { token }, {
-      headers: { Authorization: `Bearer ${authToken}` },
+    const res = await apiFetch("/api/sos/me/push-token", {
+      method: "PATCH",
+      body: JSON.stringify({ token }),
     });
-  } catch {/* silent */}
+    await parseJson(res);
+  } catch {
+    /* silent */
+  }
 }
