@@ -16,6 +16,7 @@ import moderationRoutes from "./routes/moderationRoutes.js";
 import searchRoutes from "./routes/searchRoutes.js";
 import sosRoutes from "./routes/sosRoutes.js";
 import directoryRoutes from "./routes/directoryRoutes.js";
+import skillRoutes from "./routes/skillRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -87,6 +88,7 @@ app.use("/api/moderation", moderationRoutes);
 app.use("/api/search", apiLimiter, searchRoutes);
 app.use("/api/sos", apiLimiter, sosRoutes);
 app.use("/api/directory", apiLimiter, directoryRoutes);
+app.use("/api/skills", apiLimiter, skillRoutes);
 
 // Rate limit riêng cho upload (áp lên POST /api/posts)
 app.use("/api/posts", (req, res, next) => {

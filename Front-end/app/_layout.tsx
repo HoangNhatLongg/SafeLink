@@ -193,6 +193,24 @@ export default function RootLayout() {
               headerShown: false,
             }}
           />
+          <Stack.Screen
+            name="skill/[id]"
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="saved-skills"
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="skill-moderation"
+            options={{
+              headerShown: false,
+            }}
+          />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>

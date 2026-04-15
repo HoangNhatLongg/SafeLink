@@ -446,11 +446,12 @@ export const deletePost = async (req, res) => {
       return res.status(403).json({ message: "Bạn không có quyền xóa bài viết này." });
     }
 
-    // Soft delete
+    // Soft delete: đánh dấu xóa, MongoDB TTL index sẽ tự hard delete sau 30 ngày
     post.status = "deleted";
+    post.deletedAt = new Date();
     await post.save();
 
-    // Xóa GIS data
+    // Xóa GIS data ngay (không cần giữ lại)
     await deletePostLocation(id);
 
     // Xóa ảnh/video trên Cloudinary (background, không block response)

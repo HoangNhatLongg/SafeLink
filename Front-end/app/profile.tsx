@@ -223,7 +223,6 @@ export default function ProfileScreen() {
         )}
       </View>
 
-      <Text style={s.profileId}>ID: {me?.id || "..."}</Text>
 
       {/* Bio */}
       {me?.profile?.bio ? <Text style={s.bio}>{me.profile.bio}</Text> : null}

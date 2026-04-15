@@ -267,6 +267,29 @@ address TEXT, created_at TIMESTAMPTZ
 // Không dùng GeoJSON — tính khoảng cách bằng Haversine trong controller
 ```
 
+### Skill (MongoDB)
+```js
+{
+  title (required, max 200), summary (max 500),
+  category: 'so_cap_cuu|pccc|thien_tai|an_toan_dien|tai_nan|tam_ly|khac',
+  coverImage: { url, publicId },         // Ảnh bìa card
+  videoUrl: String,                      // YouTube link (embed khi xem online)
+  steps: [{
+    order: Number,
+    title: String,
+    content: String (max 3000),
+    images: [{ url, publicId }],         // Ảnh minh họa từng bước
+  }],
+  tags: [String], difficulty: 'co_ban|trung_binh|nang_cao',
+  duration: String,                      // VD: "5-10 phút"
+  status: 'active|pending|rejected',     // default: 'pending'
+  submittedBy (ref User), reviewedBy (ref User), reviewedAt, rejectReason,
+  viewCount: Number,
+  timestamps
+}
+// Indexes: {status,category}, {status,createdAt}, text index {title,summary,tags}
+```
+
 ---
 
 ## 5. API ENDPOINTS
@@ -337,6 +360,16 @@ address TEXT, created_at TIMESTAMPTZ
 | GET | `/nearby` | Gần vị trí Haversine (params: lat, lng, radius=5km) | Không |
 | POST | `/contribute` | Đóng góp mới (status=pending) | Optional JWT |
 | GET | `/pending` | Danh sách chờ duyệt | Moderator |
+| PATCH | `/:id/review` | Duyệt/Từ chối (body: action, rejectReason) | Moderator |
+
+### Skills — `/api/skills` (Public / JWT / Moderator)
+| Method | Path | Mô tả | Auth |
+|--------|------|-------|------|
+| GET | `/` | Danh sách (params: category, difficulty, search, page, limit) | Không |
+| GET | `/pending` | Danh sách chờ duyệt | Moderator |
+| POST | `/contribute` | Đóng góp kỹ năng mới (FormData: title, steps, ảnh, ...) | JWT |
+| GET | `/:id` | Chi tiết kỹ năng (đầy đủ steps + ảnh) | Không |
+| POST | `/:id/view` | Tăng lượt xem | Không |
 | PATCH | `/:id/review` | Duyệt/Từ chối (body: action, rejectReason) | Moderator |
 
 ---
@@ -449,7 +482,7 @@ fetchTagSuggestions(q)
 (tabs)/index             → Home Feed
 (tabs)/sos               → SOS
 (tabs)/directory         → Danh bạ khẩn cấp
-(tabs)/skills            → Kỹ năng
+(tabs)/skills            → Thư viện kỹ năng
 (tabs)/menu              → Menu
 create-post              → Tạo bài viết (stack modal)
 post/[id]                → Chi tiết bài
@@ -458,6 +491,9 @@ profile                  → Profile của tôi
 search                   → Tìm kiếm toàn cục
 saved-posts              → Bài đã lưu
 saved-directory          → Danh bạ đã lưu (offline)
+skill/[id]               → Chi tiết kỹ năng (việt kèm ảnh offline)
+saved-skills             → Kỹ năng đã lưu offline
+skill-moderation         → Duyệt đóng góp kỹ năng (Moderator)
 nearby                   → Bài viết gần đây
 followers-list           → Followers/Following
 moderation               → Duyệt báo cáo bài viết
@@ -475,6 +511,27 @@ fetchNearbyDirectory({ lat, lng, radius?, type? })
 contributeDirectory(payload: ContributePayload)
 fetchPendingDirectory()                          // Moderator
 reviewDirectoryItem(id, action, rejectReason?)   // Moderator
+```
+
+### Skills API (`features/skills/skillsApi.ts`)
+```ts
+fetchSkills({ category?, difficulty?, search?, page?, limit? })
+// → dùng fetchWithTimeout (8s) — public, không cần token
+fetchSkillDetail(id)
+incrementSkillView(id)
+contributeSkill(formData: FormData)  // JWT required
+fetchPendingSkills(page?)            // Moderator
+reviewSkill(id, action, rejectReason?)  // Moderator
+```
+
+### Skills Offline Storage (`features/skills/skillsOfflineStorage.ts`)
+```ts
+saveSkill(skill)        // Download toàn bộ ảnh về expo-file-system, không save video
+removeSkill(id)         // Xóa ảnh local + entry AsyncStorage
+getSavedSkills()
+isSkillSaved(id)
+clearAllSavedSkills()   // Xóa toàn bộ skills_images/
+cacheSkillsList(items) / getCachedSkillsList() / isCacheValid(cache)
 ```
 
 ### Offline Storage (`features/emergency/offlineStorage.ts`)
@@ -543,9 +600,18 @@ OAUTH_SUCCESS_REDIRECT=...
   - Backend: tự hết hạn sau 24h, Haversine notify users lân cận, ưu tiên đầu feed
   - Phân loại: 🔥 Hỏa hoạn, ⛰️ Sạt lở, 🚗 Tai nạn, 🚨 Cướp giật, 🏥 Y tế, 🌊 Lũ lụt, ⚠️ Khác
   - Tài liệu chi tiết: `Context/SOS_Technical_Doc.md`
+- **Thư viện kỹ năng (Skills)** — danh sách kỹ năng an toàn cộng đồng
+  - Danh mục: Sơ cấp cứu, PCCC, Thiên tai, An toàn điện, Tai nạn, Tâm lý, Khác
+  - Grid 2 cột SkillCard: ảnh bìa, badge danh mục/độ khó, bookmark
+  - Tìm kiếm + filter danh mục (online: server, offline: client-side)
+  - Chi tiết kỹ năng: video YouTube WebView (online), các bước + ảnh minh họa
+  - **Offline**: download toàn bộ ảnh (cover + step images) vào expo-file-system
+  - Video không save offline — chỉ xem khi có kết nối
+  - Đóng góp kỹ năng: yêu cầu JWT, gửi FormData (có ảnh), chờ moderator duyệt
+  - Màn hình `/saved-skills`: quản lý kỹ năng đã lưu offline
+  - Màn hình `/skill-moderation`: Moderator duyệt/từ chối đóng góp
 
 ### Chưa hoàn thành / Đang phát triển 🔧
-- Thư viện kỹ năng sơ cấp cứu (Tab Skills)
 - Push Notification (chưa tích hợp FCM/APNS)
 - Admin Web (chưa xây dựng)
 - Rate limiting API
@@ -553,6 +619,7 @@ OAUTH_SUCCESS_REDIRECT=...
 - AI phân loại nội dung
 - Production deployment
 - Directory: seed thêm dữ liệu thật vào MongoDB
+- Skills: seed dữ liệu mẫu cho các danh mục
 
 ---
 
@@ -571,7 +638,11 @@ OAUTH_SUCCESS_REDIRECT=...
 
 - Backend dùng `npm start` (node thường, **KHÔNG có hot reload**). Sau khi sửa code backend **PHẢI restart** server. Dùng `npm run dev` (nodemon) trong development.
 - `directoryApi.ts` dùng `fetchWithTimeout` (raw fetch + 8s timeout), **KHÔNG** dùng `apiFetch` — vì directory là public API, không cần Bearer token.
+- `skillsApi.ts` tương tự: dùng `fetchWithTimeout` cho public endpoints (GET list/detail), dùng `apiFetch` cho contribute/pending/review.
 - Filter theo `type` trong directory là **client-side** hoàn toàn, không gọi API lại.
+- Skills offline: ảnh được download về `documentDirectory/skills_images/` qua `expo-file-system`. Video **không** được lưu offline.
+- Route thứ tự trong skillRoutes: `/pending` và `/contribute` phải đặt **TRƯỚC** `/:id` để Express không match lầm vào dynamic param.
 - Callout trong `react-native-maps` **phải** có `width` cố định (không dùng `tooltip` prop) để tránh bị clipped.
 - Banner "dữ liệu cũ" chỉ hiện khi có cache > 1 giờ. Mock/built-in data không kích hoạt banner.
-- AI_Context.md có file chi tiết kỹ thuật ở `Context/Directory_Technical_Doc.md`.
+- AI_Context.md có file chi tiết kỹ thuật ở `Context/Directory_Technical_Doc.md` và `Context/Skill_Library_Technical_Doc.md`.
+- Cập nhật: 2026-04-15

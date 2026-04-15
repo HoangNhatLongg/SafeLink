@@ -136,6 +136,13 @@ const postSchema = new mongoose.Schema(
       default: "active",
       index: true,
     },
+
+    // Thời điểm bị xóa (soft delete)
+    // TTL index sẽ tự động hard delete sau 30 ngày
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -145,12 +152,15 @@ const postSchema = new mongoose.Schema(
 // ======= Indexes =======
 // Feed query: lấy bài active mới nhất
 postSchema.index({ status: 1, createdAt: -1 });
-// Score-based ranking (cho sau này)
+// Score-based ranking
 postSchema.index({ status: 1, score: -1 });
 // Lấy bài của 1 user
 postSchema.index({ author: 1, status: 1, createdAt: -1 });
 // Hỗ trợ truy vấn feed theo loại bài viết
 postSchema.index({ postType: 1, status: 1, createdAt: -1 });
+// TTL: tự động hard delete bài sau 30 ngày kể từ khi xóa mềm
+// (chỉ active khi deletedAt != null, document có deletedAt = null sẽ bị bỏ qua)
+postSchema.index({ deletedAt: 1 }, { expireAfterSeconds: 30 * 24 * 60 * 60 });
 
 const Post = mongoose.model("Post", postSchema);
 export default Post;

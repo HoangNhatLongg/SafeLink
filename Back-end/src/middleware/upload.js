@@ -223,3 +223,47 @@ export const uploadCoverMedia = multer({
 
 // Legacy: giữ nguyên export getMediaUrl để không break code cũ
 export const getMediaUrl = buildLocalMediaUrl;
+
+/**
+ * Middleware upload kỹ năng: ảnh bìa + ảnh minh họa cho từng bước
+ * - coverImage: 1 ảnh bìa
+ * - step_N_image: ảnh minh họa cho bước N (tối đa 3 ảnh/bước, 10 bước → 30 ảnh tổng)
+ * - Chỉ chấp nhận ảnh (không nhận video)
+ */
+const skillImageFilter = (req, file, cb) => {
+  if (ALLOWED_IMAGE_MIME.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error(`Chỉ chấp nhận file ảnh (${file.mimetype} không hợp lệ)`), false);
+  }
+};
+
+export const uploadSkillMedia = multer({
+  storage: isCloudinaryConfigured
+    ? multer.memoryStorage()
+    : multer.diskStorage({
+        destination: (req, file, cb) => cb(null, path.join(UPLOAD_DIR, "images")),
+        filename: (req, file, cb) => {
+          const ext = path.extname(file.originalname);
+          cb(null, `skill-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+        },
+      }),
+  fileFilter: skillImageFilter,
+  limits: { fileSize: IMAGE_MAX_BYTES, files: 31 }, // 1 bìa + tối đa 30 ảnh bước
+}).any();
+
+/**
+ * Error handler cho skill upload — bắt lỗi Multer trả 400 thay vì 500
+ */
+export function handleSkillUploadError(err, req, res, next) {
+  if (err?.code === "LIMIT_FILE_SIZE") {
+    return res.status(400).json({ error: `Ảnh quá lớn. Tối đa ${IMAGE_MAX_MB}MB mỗi ảnh.` });
+  }
+  if (err?.code === "LIMIT_FILE_COUNT") {
+    return res.status(400).json({ error: "Quá nhiều ảnh. Tối đa 31 ảnh (1 bìa + 30 ảnh bước)." });
+  }
+  if (err) {
+    return res.status(400).json({ error: err.message || "Lỗi upload ảnh" });
+  }
+  next();
+}

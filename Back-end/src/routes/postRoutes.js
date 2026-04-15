@@ -36,19 +36,22 @@ const uploadPostMiddleware = (req, res, next) => {
   });
 };
 
-// ─────────── Bài viết ───────────
-// Các route công cộng (có thể không đăng nhập)
-router.get("/", optionalAuth, getFeed);
+// ─────────── Route tĩnh (PHẢI đặt TRƯỚC /:id) ───────────────────────────
+// Nếu /saved, /nearby, /recommended đặt SAU /:id thì Express sẽ khớp
+// "saved" vào :id → CastError khi Mongoose ép thành ObjectId.
+router.get("/saved", verifyToken, getSavedPosts);
 router.get("/nearby", optionalAuth, getNearbyPosts);
 router.get("/recommended", optionalAuth, getRecommendedFeed);
+
+// ─────────── Route động (sau cùng) ──────────────────────────────────────
+router.get("/", optionalAuth, getFeed);
 router.get("/:id", optionalAuth, getPostById);
 router.get("/:id/comments", optionalAuth, getComments);
 
-// Các route yêu cầu đăng nhập
+// ─────────── Các route yêu cầu đăng nhập ────────────────────────────────
 router.use(verifyToken);
 
 router.post("/", uploadPostMiddleware, createPost);
-router.get("/saved", getSavedPosts);
 router.put("/:id", uploadPostMiddleware, updatePost);
 router.delete("/:id", deletePost);
 router.post("/:id/like", likePost);

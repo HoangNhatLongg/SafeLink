@@ -60,6 +60,11 @@ export default function MenuTab() {
           label="Danh bạ đã lưu (Offline)"
           onPress={() => router.push("/saved-directory")}
         />
+        <MenuRow
+          icon="library-outline"
+          label="Kỹ năng đã lưu (Offline)"
+          onPress={() => router.push("/saved-skills")}
+        />
         {me ? (
           <MenuRow
             icon="log-out-outline"
@@ -84,6 +89,11 @@ export default function MenuTab() {
               icon="book-outline"
               label="Duyệt đóng góp danh bạ"
               onPress={() => router.push("/directory-moderation")}
+            />
+            <MenuRow
+              icon="school-outline"
+              label="Duyệt đóng góp kỹ năng"
+              onPress={() => router.push("/skill-moderation")}
             />
           </>
         ) : null}
