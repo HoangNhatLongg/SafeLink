@@ -1,4 +1,5 @@
 import Directory from "../models/directoryModel.js";
+import Volunteer from "../models/volunteerModel.js";
 
 // Haversine distance (km)
 function haversine(lat1, lng1, lat2, lng2) {
@@ -35,12 +36,39 @@ export const getDirectory = async (req, res) => {
       ];
     }
 
-    const [items, total] = await Promise.all([
+    const [directoryItems, total] = await Promise.all([
       Directory.find(filter).sort({ name: 1 }).skip(skip).limit(lmt).lean(),
       Directory.countDocuments(filter),
     ]);
 
-    return res.json({ items, total, page: parseInt(page), limit: lmt });
+    // Fetch and merge Volunteers
+    const volFilter = { status: "active" };
+    if (province) volFilter.province = new RegExp(province, "i");
+    if (district) volFilter.district = new RegExp(district, "i");
+    if (type) volFilter.unitType = type;
+    if (search) {
+      volFilter.$or = [
+        { unitName: new RegExp(search, "i") },
+        { address: new RegExp(search, "i") },
+        { phone: new RegExp(search, "i") },
+      ];
+    }
+    
+    // Chỉ lấy volunteer cho trang 1 để tránh trùng lặp ở các trang sau
+    let mappedVols = [];
+    if (page === 1) {
+      const volItems = await Volunteer.find(volFilter).lean();
+      mappedVols = volItems.map(v => ({
+        ...v,
+        name: v.unitName,
+        type: v.unitType,
+        isVolunteer: true
+      }));
+    }
+
+    const items = [...mappedVols, ...directoryItems];
+
+    return res.json({ items, total: total + mappedVols.length, page: parseInt(page), limit: lmt });
   } catch (err) {
     console.error("getDirectory error:", err);
     return res.status(500).json({ message: "Lỗi server.", error: err.message });
@@ -73,7 +101,26 @@ export const getNearbyDirectory = async (req, res) => {
     };
     if (type) filter.type = type;
 
-    const candidates = await Directory.find(filter).lean();
+    const volFilter = {
+      status: "active",
+      lat: { $gte: userLat - latDelta, $lte: userLat + latDelta },
+      lng: { $gte: userLng - lngDelta, $lte: userLng + lngDelta },
+    };
+    if (type) volFilter.unitType = type;
+
+    const [dirCandidates, volCandidates] = await Promise.all([
+      Directory.find(filter).lean(),
+      Volunteer.find(volFilter).lean()
+    ]);
+
+    const mappedVols = volCandidates.map(v => ({
+      ...v,
+      name: v.unitName,
+      type: v.unitType,
+      isVolunteer: true
+    }));
+
+    const candidates = [...dirCandidates, ...mappedVols];
 
     // Lọc chính xác bằng Haversine và tính khoảng cách
     const nearby = candidates
@@ -166,6 +213,129 @@ export const reviewDirectory = async (req, res) => {
     await item.save();
 
     return res.json({ message: action === "approve" ? "Đã duyệt." : "Đã từ chối.", item });
+  } catch (err) {
+    return res.status(500).json({ message: "Lỗi server.", error: err.message });
+  }
+};
+
+/**
+ * GET /api/directory/all (Admin/Moderator only)
+ * Query: status, search, page, limit
+ */
+export const getAllDirectory = async (req, res) => {
+  try {
+    const { status, search, page = 1, limit = 50 } = req.query;
+    const skip = (Math.max(1, parseInt(page)) - 1) * Math.min(100, parseInt(limit));
+    const lmt = Math.min(100, parseInt(limit) || 50);
+
+    const filter = {};
+    if (status && status !== 'all') filter.status = status;
+    if (search) {
+      filter.$or = [
+        { name: new RegExp(search, "i") },
+        { address: new RegExp(search, "i") },
+        { phone: new RegExp(search, "i") },
+      ];
+    }
+
+    const [items, total] = await Promise.all([
+      Directory.find(filter)
+        .populate("submittedBy", "name email")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(lmt)
+        .lean(),
+      Directory.countDocuments(filter),
+    ]);
+
+    return res.json({ items, total, page: parseInt(page), limit: lmt });
+  } catch (err) {
+    return res.status(500).json({ message: "Lỗi server.", error: err.message });
+  }
+};
+
+/**
+ * POST /api/directory (Admin/Moderator only)
+ */
+export const createDirectory = async (req, res) => {
+  try {
+    const { name, phone, address, province, district, ward, type, lat, lng, note, status } = req.body;
+
+    if (!name || !phone || !address || !province || lat === undefined || lng === undefined) {
+      return res.status(400).json({ message: "Thiếu thông tin bắt buộc." });
+    }
+
+    const item = await Directory.create({
+      name: name.trim(),
+      phone: phone.trim(),
+      address: address.trim(),
+      province: province.trim(),
+      district: district?.trim(),
+      ward: ward?.trim(),
+      type: type || "khac",
+      lat: parseFloat(lat),
+      lng: parseFloat(lng),
+      note: note?.trim(),
+      status: status || "active",
+      submittedBy: req.user?._id || null,
+      reviewedBy: req.user?._id || null,
+      reviewedAt: new Date()
+    });
+
+    try {
+      import("../socket/index.js").then(({ getIo }) => {
+        getIo().emit("newDirectory", item);
+      });
+    } catch (e) {
+      console.warn("Socket newDirectory error:", e);
+    }
+
+    return res.status(201).json({ message: "Đã thêm danh bạ.", item });
+  } catch (err) {
+    return res.status(500).json({ message: "Lỗi server.", error: err.message });
+  }
+};
+
+/**
+ * PUT /api/directory/:id (Admin/Moderator only)
+ */
+export const updateDirectory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, phone, address, province, district, ward, type, lat, lng, note, status } = req.body;
+
+    const item = await Directory.findById(id);
+    if (!item) return res.status(404).json({ message: "Không tìm thấy danh bạ." });
+
+    if (name !== undefined) item.name = name.trim();
+    if (phone !== undefined) item.phone = phone.trim();
+    if (address !== undefined) item.address = address.trim();
+    if (province !== undefined) item.province = province.trim();
+    if (district !== undefined) item.district = district.trim();
+    if (ward !== undefined) item.ward = ward.trim();
+    if (type !== undefined) item.type = type;
+    if (lat !== undefined) item.lat = parseFloat(lat);
+    if (lng !== undefined) item.lng = parseFloat(lng);
+    if (note !== undefined) item.note = note.trim();
+    if (status !== undefined) item.status = status;
+
+    await item.save();
+    return res.json({ message: "Cập nhật thành công.", item });
+  } catch (err) {
+    return res.status(500).json({ message: "Lỗi server.", error: err.message });
+  }
+};
+
+/**
+ * DELETE /api/directory/:id (Admin/Moderator only)
+ */
+export const deleteDirectory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const item = await Directory.findByIdAndDelete(id);
+    if (!item) return res.status(404).json({ message: "Không tìm thấy danh bạ." });
+    
+    return res.json({ message: "Đã xóa danh bạ." });
   } catch (err) {
     return res.status(500).json({ message: "Lỗi server.", error: err.message });
   }

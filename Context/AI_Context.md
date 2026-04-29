@@ -74,7 +74,8 @@ SafeLink/
 │   │   │   ├── userController.js   # Profile, avatar, cover, suggestions
 │   │   │   ├── moderationController.js
 │   │   │   ├── searchController.js
-│   │   │   └── directoryController.js  # Directory CRUD + Haversine nearby + review
+│   │   │   ├── directoryController.js  # Directory CRUD + Haversine nearby + review
+│   │   │   └── volunteerController.js  # Volunteer CRUD: register, getAll, nearby, pending, review, my
 │   │   ├── routes/
 │   │   │   ├── authRoutes.js       # /api/auth
 │   │   │   ├── postRoutes.js       # /api/posts
@@ -83,7 +84,8 @@ SafeLink/
 │   │   │   ├── userRoutes.js       # /api/users
 │   │   │   ├── moderationRoutes.js # /api/moderation
 │   │   │   ├── searchRoutes.js     # /api/search
-│   │   │   └── directoryRoutes.js  # /api/directory
+│   │   │   ├── directoryRoutes.js  # /api/directory
+│   │   │   └── volunteerRoutes.js  # /api/volunteers
 │   │   ├── middleware/
 │   │   │   ├── authMiddleware.js   # verifyToken, optionalAuth
 │   │   │   ├── roleMiddleware.js   # requireRole (moderator/admin)
@@ -119,6 +121,8 @@ SafeLink/
 │   │   ├── nearby.tsx             # Bài viết gần vị trí (PostGIS)
 │   │   ├── moderation.tsx         # Báo cáo vi phạm
 │   │   ├── directory-moderation.tsx # Admin duyệt đóng góp danh bạ
+│   │   ├── volunteer-moderation.tsx # Admin duyệt đăng ký đội tình nguyện
+│   │   ├── register-volunteer.tsx # Route đăng ký làm đội cứu hộ
 │   │   ├── saved-directory.tsx    # Quản lý danh bạ đã lưu offline
 │   │   ├── privacy.tsx            # Cài đặt quyền riêng tư
 │   │   ├── login.tsx / register.tsx
@@ -153,8 +157,11 @@ SafeLink/
 │   │   │   ├── AgencyCard.tsx     # Card đơn vị (call, bookmark, directions)
 │   │   │   ├── FilterBar.tsx      # Bộ lọc mode/search/type/province
 │   │   │   ├── MapSection.tsx     # Bản đồ với Callout 220px cố định
-│   │   │   ├── ContributeModal.tsx# Form đóng góp
+│   │   │   ├── ContributeModal.tsx# Form đóng góp danh bạ chính thức
+│   │   │   ├── RegisterVolunteerModal.tsx # Form đăng ký đội tình nguyện
 │   │   │   ├── directoryApi.ts    # API calls (timeout 8s, fetchWithTimeout)
+│   │   │   ├── volunteerApi.ts    # API calls đăng ký tình nguyện
+│   │   │   ├── volunteerTypes.ts  # Types + labels + icons + colors
 │   │   │   ├── offlineStorage.ts  # AsyncStorage: saved + cache
 │   │   │   ├── agencyData.ts      # 25 built-in fallback entries (SĐT thật)
 │   │   │   ├── locationService.ts # expo-location GPS
@@ -253,18 +260,23 @@ address TEXT, created_at TIMESTAMPTZ
 -- Index: GIST(location) cho ST_DWithin
 ```
 
-### Directory (MongoDB)
+### Volunteer (MongoDB)
 ```js
 {
-  name, phone, address (required),
-  province (required), district, ward,
-  type: 'csgt|pccc|canh_sat|benh_vien|cuu_thuong|khac',
+  unitName (required, max 200),
+  unitType: 'sua_xe|doi_sos|ho_tro_lu|cuu_nan|y_te_tn|van_chuyen|on_dinh|khac',
+  entityKind: 'individual|group',
+  contactName (required, max 100),
+  phone (required), address (required), province (required),
+  district, ward,
   lat, lng (required),
-  status: 'active|pending|rejected',  // default: 'active'
-  note, addedBy (ref User),
+  description (max 2000), serviceArea (max 500), availableTime (max 200), note,
+  verificationImages: [{ url, publicId?, filename? }],  // tối đa 5 ảnh
+  status: 'pending|active|rejected',  // default: 'pending'
+  submittedBy (ref User), reviewedBy (ref User), reviewedAt, rejectReason,
   timestamps
 }
-// Không dùng GeoJSON — tính khoảng cách bằng Haversine trong controller
+// Indexes: {unitType,status}, {province,district}, {lat,lng}, text {unitName,description}
 ```
 
 ### Skill (MongoDB)
@@ -371,6 +383,16 @@ address TEXT, created_at TIMESTAMPTZ
 | GET | `/:id` | Chi tiết kỹ năng (đầy đủ steps + ảnh) | Không |
 | POST | `/:id/view` | Tăng lượt xem | Không |
 | PATCH | `/:id/review` | Duyệt/Từ chối (body: action, rejectReason) | Moderator |
+
+### Volunteers — `/api/volunteers` (Public / JWT / Admin)
+| Method | Path | Mô tả | Auth |
+|--------|------|-------|------|
+| GET | `/` | Danh sách đội tình nguyện đã duyệt (params: province, district, unitType, search) | Không |
+| GET | `/nearby` | Gần vị trí (params: lat, lng, radius=10) | Không |
+| POST | `/register` | Đăng ký làm đội tình nguyện (FormData + ảnh xác minh) | JWT |
+| GET | `/my` | Xem đơn đăng ký của chính mình | JWT |
+| GET | `/pending` | Danh sách chờ duyệt | Admin |
+| PATCH | `/:id/review` | Duyệt/Từ chối (body: action, rejectReason) | Admin |
 
 ---
 
@@ -592,6 +614,16 @@ OAUTH_SUCCESS_REDIRECT=...
   - Callout bản đồ: width 220px cố định (fix clipped bug)
   - Màn hình quản lý danh bạ đã lưu (`/saved-directory`)
   - Màn hình duyệt đóng góp cho Moderator (`/directory-moderation`)
+- **Đăng ký Đội Cứu Hộ / Tình Nguyện** — mới! Đăng ký làm đội hỗ trợ cộng đồng
+  - 8 loại: Vá/Sửa xe, Đội SOS, Hỗ trợ lũ lụt, Cứu nạn, Y tế TN, Vận chuyển, Ổn định, Khác
+  - Đăng ký cá nhân hoặc nhóm/tổ chức
+  - Upload tối đa 5 ảnh xác minh (CMND, ảnh đội, phương tiện...)
+  - Model riêng (volunteerModel.js) tách biệt khỏi Directory chính thức
+  - Admin duyệt riêng tại `/volunteer-moderation`
+  - Nguyên tắc xét duyệt: chỉ Admin (không phải Moderator)
+  - Hiển thị trong tab "Tình nguyện" ở tab Danh Bạ
+  - Menu: “Đăng ký làm đội cứu hộ” ở mọi user đã đăng nhập
+  - Chuẩn bị kết nối với SOS (sẽ phát triển sau)
 - **SOS Khẩn cấp** — gửi tín hiệu SOS kèm GPS, ảnh, phân loại sự cố; bản đồ realtime; push notification
   - Nút SOS nổi (draggable), ấn giữ → SOSModal (form phân loại + ảnh)
   - Bản đồ SOSMap: hiển thị marker SOS active trong bán kính, cập nhật 30s/lần

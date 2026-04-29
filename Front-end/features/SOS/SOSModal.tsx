@@ -22,13 +22,15 @@ import { createSOS } from "./sosApi";
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const CATEGORIES = [
-  { id: "fire", label: "Hỏa hoạn", icon: "flame", color: "#FF3B30" },
-  { id: "landslide", label: "Sạt lở", icon: "trail-sign", color: "#A2845E" },
-  { id: "traffic", label: "Tai nạn", icon: "car-sport", color: "#FF9500" },
-  { id: "robbery", label: "Cướp giật", icon: "shield-half", color: "#5856D6" },
-  { id: "medical", label: "Cấp cứu", icon: "medkit", color: "#34C759" },
-  { id: "flood", label: "Lũ lụt", icon: "water", color: "#007AFF" },
-  { id: "other", label: "Khác", icon: "help-circle", color: "#8E8E93" },
+  { id: "fire",           label: "Hỏa hoạn",    icon: "flame",          color: "#FF3B30" },
+  { id: "medical",        label: "Cấp cứu",    icon: "medkit",         color: "#34C759" },
+  { id: "traffic",        label: "Tai nạn",    icon: "car-sport",      color: "#FF9500" },
+  { id: "robbery",        label: "Cướp giật",  icon: "shield-half",    color: "#5856D6" },
+  { id: "flood",          label: "Lũ lụt",     icon: "water",          color: "#007AFF" },
+  { id: "landslide",      label: "Sạt lở",    icon: "trail-sign",     color: "#A2845E" },
+  { id: "sos_support",    label: "Hỗ trợ SOS", icon: "hand-left",      color: "#FF6B35" },
+  { id: "vehicle_repair", label: "Sửa xe",     icon: "build",          color: "#795548" },
+  { id: "other",          label: "Khác",       icon: "help-circle",    color: "#8E8E93" },
 ];
 
 const RADIUS_OPTIONS = [
@@ -41,7 +43,7 @@ const RADIUS_OPTIONS = [
 interface SOSModalProps {
   visible: boolean;
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess?: (info: { category: string; coords: { latitude: number; longitude: number } }) => void;
 }
 
 export default function SOSModal({ visible, onClose, onSuccess }: SOSModalProps) {
@@ -139,8 +141,8 @@ export default function SOSModal({ visible, onClose, onSuccess }: SOSModalProps)
       });
 
       await createSOS(formData);
-      Alert.alert("Thành công", "Tín hiệu SOS của bạn đã được gửi đi.");
-      onSuccess?.();
+      Alert.alert("Thành công", "Tín hiệu SOS của bạn đã được gửi đi. Các đơn vị hỗ trợ phù hợp sẽ hiển thị trên bản đồ.");
+      onSuccess?.({ category: category!, coords: coords! });
       onClose();
       // Reset form
       setCategory(null);

@@ -32,6 +32,17 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '/assets/images/AnhDaiDien.jpg',
     },
+    phoneNumber: {
+      type: String,
+    },
+    // Trạng thái tài khoản thuộc Đội cứu hộ/Tình nguyện viên đã duyệt
+    isVolunteer: {
+      type: Boolean,
+      default: false,
+    },
+    provider: {
+      type: String,
+    },
     cover: {
       type: String,
       default: '',

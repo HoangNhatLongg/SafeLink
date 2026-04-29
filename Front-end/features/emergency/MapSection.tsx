@@ -59,9 +59,12 @@ export default function MapSection({ location, agencies, onMarkerPress }: Props)
           <Marker
             key={item._id ?? item.name}
             coordinate={{ latitude: item.lat, longitude: item.lng }}
-            pinColor={pinColor}
             onPress={() => onMarkerPress?.(item)}
+            tracksViewChanges={false}
           >
+            <View style={[styles.customMarker, { backgroundColor: pinColor }]}>
+              <Text style={styles.customMarkerText}>{icon}</Text>
+            </View>
             {/* Không dùng tooltip để tránh bị clipped */}
             <Callout
               style={styles.calloutContainer}
@@ -129,4 +132,21 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   calloutBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  customMarker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  customMarkerText: {
+    fontSize: 18,
+    lineHeight: 22,
+  },
 });

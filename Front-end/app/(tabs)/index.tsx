@@ -17,7 +17,7 @@ import { FlashList } from "@shopify/flash-list";
 import SOSButton from "@/features/SOS/SOSButton";
 import SOSModal from "@/features/SOS/SOSModal";
 
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   StyleSheet,
   View,
@@ -111,6 +111,35 @@ export default function SocialScreen() {
       };
     }, [router, loadPage])
   );
+
+  // Real-time: tự động tải bài viết mới khi có người đăng
+  useEffect(() => {
+    let active = true;
+    let socketRef: any = null;
+
+    (async () => {
+      try {
+        const { connectSocket } = await import('@/features/chat/socketClient');
+        const socket = await connectSocket();
+        if (!active || !socket) return;
+        socketRef = socket;
+
+        socket.on('newPost', () => {
+          // Tải lại trang 1 để bài mới nhất xuất hiện ở đầu feed
+          loadPage(1, false).catch(() => {});
+        });
+      } catch (e) {
+        // Không ảnh hưởng trải nghiệm nếu socket lỗi
+      }
+    })();
+
+    return () => {
+      active = false;
+      if (socketRef) {
+        socketRef.off('newPost');
+      }
+    };
+  }, [loadPage]);
 
   const onRefresh = async () => {
     setRefreshing(true);

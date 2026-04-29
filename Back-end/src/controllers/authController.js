@@ -39,6 +39,7 @@ export const loginUser = async (req, res) => {
         id: data.user._id,
         email: data.user.email,
         authType: data.user.authType,
+        name: data.user.name,
         role: data.user.role
       }
     });
@@ -60,6 +61,7 @@ export const verifyDeviceLogin = async (req, res) => {
         id: data.user._id,
         email: data.user.email,
         authType: data.user.authType,
+        name: data.user.name,
         role: data.user.role
       }
     });

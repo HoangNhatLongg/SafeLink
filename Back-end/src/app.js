@@ -17,6 +17,7 @@ import searchRoutes from "./routes/searchRoutes.js";
 import sosRoutes from "./routes/sosRoutes.js";
 import directoryRoutes from "./routes/directoryRoutes.js";
 import skillRoutes from "./routes/skillRoutes.js";
+import volunteerRoutes from "./routes/volunteerRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -89,6 +90,7 @@ app.use("/api/search", apiLimiter, searchRoutes);
 app.use("/api/sos", apiLimiter, sosRoutes);
 app.use("/api/directory", apiLimiter, directoryRoutes);
 app.use("/api/skills", apiLimiter, skillRoutes);
+app.use("/api/volunteers", apiLimiter, volunteerRoutes);
 
 // Rate limit riêng cho upload (áp lên POST /api/posts)
 app.use("/api/posts", (req, res, next) => {

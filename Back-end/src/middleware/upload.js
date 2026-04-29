@@ -221,6 +221,23 @@ export const uploadCoverMedia = multer({
   limits: { fileSize: 15 * 1024 * 1024 },
 }).single("cover");
 
+/**
+ * Middleware upload hình ảnh trong chat (1 ảnh, tối đa 15MB)
+ */
+export const uploadChatMedia = multer({
+  storage: isCloudinaryConfigured ? multer.memoryStorage() : multer.diskStorage({
+    destination: (req, file, cb) => cb(null, path.join(UPLOAD_DIR, "images")),
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname);
+      cb(null, `chat-${Date.now()}${ext}`);
+    },
+  }),
+  fileFilter: (req, file, cb) => {
+    cb(null, ALLOWED_IMAGE_MIME.includes(file.mimetype));
+  },
+  limits: { fileSize: 15 * 1024 * 1024 },
+}).single("image");
+
 // Legacy: giữ nguyên export getMediaUrl để không break code cũ
 export const getMediaUrl = buildLocalMediaUrl;
 
@@ -267,3 +284,45 @@ export function handleSkillUploadError(err, req, res, next) {
   }
   next();
 }
+
+/**
+ * Middleware upload ảnh xác minh đăng ký đội tình nguyện
+ * - Tối đa 5 ảnh, chỉ chấp nhận ảnh (không chấp nhận video)
+ * - Lưu vào uploads/images/ (fallback) hoặc Cloudinary (nếu đã cấu hình)
+ */
+export const uploadVerificationMedia = multer({
+  storage: isCloudinaryConfigured
+    ? multer.memoryStorage()
+    : multer.diskStorage({
+        destination: (req, file, cb) => cb(null, path.join(UPLOAD_DIR, "images")),
+        filename: (req, file, cb) => {
+          const ext = path.extname(file.originalname);
+          cb(null, `volunteer-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+        },
+      }),
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_IMAGE_MIME.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Chỉ chấp nhận file ảnh (${file.mimetype} không hợp lệ)`), false);
+    }
+  },
+  limits: { fileSize: IMAGE_MAX_BYTES, files: 5 }, // Tối đa 5 ảnh
+}).array("verificationImages", 5);
+
+/**
+ * Error handler cho volunteer upload
+ */
+export function handleVerificationUploadError(err, req, res, next) {
+  if (err?.code === "LIMIT_FILE_SIZE") {
+    return res.status(400).json({ error: `Ảnh quá lớn. Tối đa ${IMAGE_MAX_MB}MB mỗi ảnh.` });
+  }
+  if (err?.code === "LIMIT_FILE_COUNT") {
+    return res.status(400).json({ error: "Quá nhiều ảnh. Tối đa 5 ảnh xác minh." });
+  }
+  if (err) {
+    return res.status(400).json({ error: err.message || "Lỗi upload ảnh xác minh" });
+  }
+  next();
+}
+

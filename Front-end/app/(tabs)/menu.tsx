@@ -38,6 +38,7 @@ export default function MenuTab() {
     <SafeAreaView style={styles.safe} edges={["bottom"]}>
       <ScrollView contentContainerStyle={styles.wrap}>
         <Text style={styles.title}>Tài khoản</Text>
+        <Text style={styles.title}>{me?.name || "—"}</Text>
         <Text style={styles.sub}>{me?.email || "—"}</Text>
 
         <MenuRow
@@ -65,6 +66,21 @@ export default function MenuTab() {
           label="Kỹ năng đã lưu (Offline)"
           onPress={() => router.push("/saved-skills")}
         />
+        {me && (
+          <MenuRow
+            icon="chatbubbles-outline"
+            label="Tin nhắn & Hỗ trợ SOS"
+            onPress={() => router.push("/chat-history")}
+          />
+        )}
+        {me && (
+          <MenuRow
+            icon="shield-half-outline"
+            label="Đăng ký làm đội cứu hộ"
+            onPress={() => router.push("/register-volunteer")}
+            badge="Tình nguyện"
+          />
+        )}
         {me ? (
           <MenuRow
             icon="log-out-outline"
@@ -97,6 +113,14 @@ export default function MenuTab() {
             />
           </>
         ) : null}
+        {me?.role === "admin" && (
+          <MenuRow
+            icon="people-circle-outline"
+            label="Duyệt đội cứu hộ tình nguyện"
+            onPress={() => router.push("/volunteer-moderation")}
+            badge="Admin"
+          />
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -106,18 +130,24 @@ function MenuRow({
   icon,
   label,
   onPress,
+  badge,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
+  badge?: string;
 }) {
   return (
     <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
       <Ionicons name={icon} size={22} color="#FF3B30" />
       <Text style={styles.rowLabel}>{label}</Text>
+      {badge && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{badge}</Text>
+        </View>
+      )}
       <Ionicons name="chevron-forward" size={20} color="#ccc" />
     </TouchableOpacity>
-    
   );
 }
 
@@ -136,4 +166,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   rowLabel: { flex: 1, fontSize: 16, color: "#222" },
+  badge: {
+    backgroundColor: "#FFE0E0",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginRight: 4,
+  },
+  badgeText: { fontSize: 10, color: "#e53935", fontWeight: "700" },
 });

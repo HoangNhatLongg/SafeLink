@@ -72,7 +72,7 @@ const postSchema = new mongoose.Schema(
     // Danh mục khẩn cấp
     sosCategory: {
       type: String,
-      enum: ["fire", "landslide", "traffic", "robbery", "medical", "flood", "other"],
+      enum: ["fire", "landslide", "traffic", "robbery", "medical", "flood", "sos_support", "vehicle_repair", "other"],
       default: null,
     },
 

@@ -182,6 +182,15 @@ export const createPost = async (req, res) => {
     cacheDelPattern("feed:");
     cacheDelPattern("recommended:");
 
+    // Emit Socket.IO event cho real-time feed
+    try {
+      import("../socket/index.js").then(({ getIo }) => {
+        getIo().emit("newPost", post);
+      });
+    } catch (e) {
+      console.warn("Socket newPost error:", e);
+    }
+
     return res.status(201).json({
       message: "Đăng bài thành công.",
       post,

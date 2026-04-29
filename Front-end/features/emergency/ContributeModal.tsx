@@ -23,7 +23,7 @@ interface Props {
   userLocation?: { latitude: number; longitude: number } | null;
 }
 
-const TYPES: AgencyType[] = ["csgt", "pccc", "canh_sat", "benh_vien", "cuu_thuong", "khac"];
+const TYPES: AgencyType[] = ["csgt", "pccc", "canh_sat", "benh_vien", "cuu_thuong", "sua_xe_cap_cuu", "ho_tro_sos", "khac"];
 
 export default function ContributeModal({ visible, onClose, userLocation }: Props) {
   const [name, setName] = useState("");
@@ -50,10 +50,12 @@ export default function ContributeModal({ visible, onClose, userLocation }: Prop
       Alert.alert("Thiếu thông tin", "Vui lòng điền đầy đủ: Tên, Số điện thoại, Địa chỉ, Tỉnh/TP.");
       return;
     }
-    const lat = parseFloat(latStr);
-    const lng = parseFloat(lngStr);
-    if (isNaN(lat) || isNaN(lng)) {
-      Alert.alert("Tọa độ không hợp lệ", "Vui lòng nhập tọa độ GPS chính xác.");
+    // Thay thế dấu phẩy thành dấu chấm để hỗ trợ bàn phím tiếng Việt/Pháp
+    const lat = parseFloat(latStr.replace(',', '.'));
+    const lng = parseFloat(lngStr.replace(',', '.'));
+    
+    if (isNaN(lat) || lat < -90 || lat > 90 || isNaN(lng) || lng < -180 || lng > 180) {
+      Alert.alert("Tọa độ không hợp lệ", "Vĩ độ phải từ -90 đến 90, Kinh độ từ -180 đến 180.");
       return;
     }
 

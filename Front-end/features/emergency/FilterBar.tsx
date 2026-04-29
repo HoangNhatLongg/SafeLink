@@ -31,12 +31,14 @@ interface Props {
 }
 
 const TYPES: Array<{ key: AgencyType; label: string }> = [
-  { key: "csgt", label: "CSGT" },
-  { key: "pccc", label: "PCCC" },
-  { key: "canh_sat", label: "Công An" },
-  { key: "benh_vien", label: "Bệnh Viện" },
-  { key: "cuu_thuong", label: "Cấp Cứu" },
-  { key: "khac", label: "Khác" },
+  { key: "csgt",           label: "CSGT" },
+  { key: "pccc",           label: "PCCC" },
+  { key: "canh_sat",       label: "Công An" },
+  { key: "benh_vien",      label: "Bệnh Viện" },
+  { key: "cuu_thuong",     label: "Cấp Cứu" },
+  { key: "sua_xe_cap_cuu", label: "Sửa Xe" },
+  { key: "ho_tro_sos",     label: "Hỗ Trợ SOS" },
+  { key: "khac",           label: "Khác" },
 ];
 
 export function FilterBar({

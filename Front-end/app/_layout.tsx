@@ -8,13 +8,19 @@ import '../i18n';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useEffect } from 'react';
-import { Alert } from 'react-native';
+import { Alert, LogBox } from 'react-native';
 import { setSessionExpiredHandler } from '@/features/api/http';
-import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync } from '@/features/SOS/notificationSetup';
 import { uploadPushToken, updateLocation } from '@/features/SOS/sosApi';
 import { getToken } from '@/features/auth/utils/storage';
 import * as Location from 'expo-location';
+import Constants, { ExecutionEnvironment } from "expo-constants";
+
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+// Ignore known push notification warning on Expo Go (SDK 53)
+if (isExpoGo) {
+  LogBox.ignoreLogs(['Android Push notifications']);
+}
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -75,17 +81,80 @@ export default function RootLayout() {
     })();
 
     // 3. Xử lý khi nhấn vào thông báo (ví dụ: chuyển đến bài bài SOS)
-    responseListener = Notifications.addNotificationResponseReceivedListener(response => {
-      const data = response.notification.request.content.data;
-      if (data?.type === 'sos_alert' && data.postId) {
-        router.push({ pathname: '/post/[id]', params: { id: data.postId } });
+    if (!isExpoGo) {
+      try {
+        const Notifications = require('expo-notifications');
+        responseListener = Notifications.addNotificationResponseReceivedListener((response: any) => {
+          const data = response.notification.request.content.data;
+          if (data?.type === 'sos_alert' && data.postId) {
+            router.push({ pathname: '/post/[id]', params: { id: data.postId } });
+          }
+        });
+      } catch (e) {
+        console.warn("Could not setup notification listener", e);
       }
-    });
+    }
 
     return () => {
       if (responseListener) {
         responseListener.remove();
       }
+    };
+  }, [router]);
+
+  // Global Real-time Socket Listeners
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const { connectSocket, getSocket } = await import('@/features/chat/socketClient');
+        const socket = await connectSocket();
+        if (!active || !socket) return;
+
+        socket.on('newPost', (post) => {
+          // Alert.alert("Tin mới", "Có một bài viết mới vừa được đăng trên cộng đồng!");
+        });
+
+        socket.on('newSOS', (sos) => {
+          Alert.alert("🚨 Cảnh báo khẩn cấp", `Có một tín hiệu SOS mới vừa được phát!`, [
+            { text: "Đóng" },
+            { text: "Xem trên bản đồ", onPress: () => router.push('/(tabs)/sos') }
+          ]);
+        });
+
+        socket.on('newSkill', (skill) => {
+          // Alert.alert("Kỹ năng mới", `Kỹ năng mới: ${skill.title} vừa được thêm.`);
+        });
+
+        socket.on('newDirectory', (dir) => {
+          // Alert.alert("Danh bạ mới", `Địa điểm mới: ${dir.name} vừa được thêm vào danh bạ.`);
+        });
+
+        socket.on('volunteerApproved', () => {
+          Alert.alert("✅ Chúc mừng", "Đơn đăng ký Đội Cứu Hộ của bạn đã được duyệt thành công! Bây giờ bạn đã có huy hiệu 🛡️ Đội Hỗ Trợ.");
+        });
+
+        socket.on('volunteerRejected', () => {
+          Alert.alert("❌ Đơn bị từ chối", "Đơn đăng ký Đội Cứu Hộ của bạn đã bị từ chối. Vui lòng kiểm tra trạng thái để xem lý do và gửi yêu cầu mới.");
+        });
+      } catch (e) {
+        console.warn("Global socket listener setup error", e);
+      }
+    })();
+
+    return () => {
+      active = false;
+      import('@/features/chat/socketClient').then(({ getSocket }) => {
+        const socket = getSocket();
+        if (socket) {
+          socket.off('newPost');
+          socket.off('newSOS');
+          socket.off('newSkill');
+          socket.off('newDirectory');
+          socket.off('volunteerApproved');
+          socket.off('volunteerRejected');
+        }
+      });
     };
   }, [router]);
 
@@ -207,6 +276,12 @@ export default function RootLayout() {
           />
           <Stack.Screen
             name="skill-moderation"
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="register-volunteer"
             options={{
               headerShown: false,
             }}

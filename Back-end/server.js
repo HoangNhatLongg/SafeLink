@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 import "./src/config/passport.js";
 import { initGISTable } from "./src/config/postgresConfig.js";
 import { startSOSCleanupJob } from "./src/services/sosCleanup.js";
+import { initSocket } from "./src/socket/index.js";
 
 const PORT = process.env.PORT || 5000;
 
@@ -26,8 +27,11 @@ mongoose
     // Khởi tạo SOS cleanup job
     startSOSCleanupJob();
 
-    app.listen(PORT, "0.0.0.0", () => {
+    const server = app.listen(PORT, "0.0.0.0", () => {
       console.log(`🚀 Server running on port ${PORT}`);
     });
+
+    // Khởi tạo Socket.IO
+    initSocket(server);
   })
   .catch((err) => console.error("❌ MongoDB connection error:", err));

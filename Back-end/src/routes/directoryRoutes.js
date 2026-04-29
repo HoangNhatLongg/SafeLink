@@ -7,6 +7,10 @@ import {
   contributeDirectory,
   getPendingDirectory,
   reviewDirectory,
+  getAllDirectory,
+  createDirectory,
+  updateDirectory,
+  deleteDirectory,
 } from "../controllers/directoryController.js";
 
 const router = express.Router();
@@ -19,7 +23,11 @@ router.get("/nearby", getNearbyDirectory);
 router.post("/contribute", optionalAuth, contributeDirectory);
 
 // Admin / Moderator only
+router.get("/all", verifyToken, requireModerator, getAllDirectory);
 router.get("/pending", verifyToken, requireModerator, getPendingDirectory);
+router.post("/", verifyToken, requireModerator, createDirectory);
+router.put("/:id", verifyToken, requireModerator, updateDirectory);
 router.patch("/:id/review", verifyToken, requireModerator, reviewDirectory);
+router.delete("/:id", verifyToken, requireModerator, deleteDirectory);
 
 export default router;

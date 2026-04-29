@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { Agency } from "./types";
-import { AGENCY_TYPE_LABELS, AGENCY_TYPE_COLORS, AGENCY_TYPE_ICONS } from "./types";
+import { AGENCY_TYPE_LABELS, AGENCY_TYPE_COLORS, AGENCY_TYPE_ICONS, AGENCY_TYPE_IONICONS } from "./types";
 import { saveAgency, removeAgency, isAgencySaved } from "./offlineStorage";
 
 interface Props {
@@ -80,7 +80,8 @@ export default function AgencyCard({ item }: Props) {
   const [saved, setSaved] = useState(false);
   const typeColor = AGENCY_TYPE_COLORS[item.type] ?? "#616161";
   const typeLabel = AGENCY_TYPE_LABELS[item.type] ?? "Khác";
-  const typeIcon = AGENCY_TYPE_ICONS[item.type] ?? "📍";
+  const typeIcon  = AGENCY_TYPE_ICONS[item.type] ?? "📍";
+  const typeIonicon = AGENCY_TYPE_IONICONS[item.type] ?? "help-circle";
 
   // Kiểm tra trạng thái đã lưu hay chưa khi mời hiển thị
   useEffect(() => {
@@ -107,6 +108,7 @@ export default function AgencyCard({ item }: Props) {
         {/* Header row */}
         <View style={styles.headerRow}>
           <View style={[styles.typeBadge, { backgroundColor: typeColor }]}>
+            <Ionicons name={typeIonicon as any} size={12} color="#fff" />
             <Text style={styles.typeText}>{typeIcon} {typeLabel}</Text>
           </View>
           <View style={styles.headerRight}>
@@ -215,6 +217,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   typeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 3,

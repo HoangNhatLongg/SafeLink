@@ -150,6 +150,26 @@ export const createSOS = async (req, res) => {
         : Promise.resolve(),
     ]).catch((err) => console.error("Push notification error:", err.message));
 
+    // Emit Socket.IO event for Real-time Map
+    try {
+      import("../socket/index.js").then(({ getIo }) => {
+        getIo().emit("newSOS", {
+          id: post._id,
+          author: post.author,
+          category: post.sosCategory,
+          description: post.content,
+          images: post.images,
+          location: post.location,
+          radius: post.sosRadius,
+          sosStatus: post.sosStatus,
+          expiresAt: post.sosExpiresAt,
+          createdAt: post.createdAt,
+        });
+      });
+    } catch (e) {
+      console.warn("Socket newSOS error:", e);
+    }
+
     return res.status(201).json({
       message: "Đã gửi tín hiệu SOS thành công.",
       post: {
@@ -263,6 +283,15 @@ export const resolveSOS = async (req, res) => {
     }
 
     cacheDelPattern("feed:");
+
+    // Emit Socket.IO event for Real-time Map
+    try {
+      import("../socket/index.js").then(({ getIo }) => {
+        getIo().emit("sosResolved", { id });
+      });
+    } catch (e) {
+      console.warn("Socket sosResolved error:", e);
+    }
 
     return res.json({ message: "Đã đánh dấu SOS hoàn tất.", sosStatus: "resolved" });
   } catch (err) {

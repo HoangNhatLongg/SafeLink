@@ -1,29 +1,42 @@
-import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import { Platform } from "react-native";
-import Constants from "expo-constants";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 
-/**
- * Cấu hình cách hiển thị thông báo khi app đang ở foreground
- */
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+let Notifications: any = null;
+
+if (!isExpoGo) {
+  try {
+    Notifications = require("expo-notifications");
+    
+    /**
+     * Cấu hình cách hiển thị thông báo khi app đang ở foreground
+     */
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+      }),
+    });
+  } catch (e) {
+    console.warn("Could not load expo-notifications", e);
+  }
+}
 
 /**
  * Đăng ký Push Token cho Expo
  * Trả về token nếu thành công, null nếu thất bại
  */
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
-  // Chỉ hỗ trợ thiết bị thật — simulator/emulator không có Push Token
-  if (!Device.isDevice) {
-    console.log("ℹ️ Push Notifications chỉ hoạt động trên thiết bị thật.");
+  // Chỉ hỗ trợ thiết bị thật và không hỗ trợ Expo Go
+  if (isExpoGo || !Device.isDevice) {
+    console.log("ℹ️ Push Notifications chỉ hoạt động trên thiết bị thật và bản build Development.");
     return null;
   }
+
+  if (!Notifications) return null;
 
   try {
     // Tạo notification channel cho Android
@@ -61,7 +74,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     console.log("📲 Expo Push Token:", token);
     return token;
   } catch (e: any) {
-    // Không crash app — chỉ warn (thường xảy ra trên Expo Go chưa đăng nhập)
+    // Không crash app — chỉ warn
     console.warn("⚠️ Không lấy được Push Token:", e.message);
     return null;
   }

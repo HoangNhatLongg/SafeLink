@@ -242,6 +242,16 @@ export async function reviewSkill(req, res) {
 
     await skill.save();
 
+    if (action === "approve") {
+      try {
+        import("../socket/index.js").then(({ getIo }) => {
+          getIo().emit("newSkill", skill);
+        });
+      } catch (e) {
+        console.warn("Socket newSkill error:", e);
+      }
+    }
+
     res.json({
       message: action === "approve" ? "Đã duyệt kỹ năng" : "Đã từ chối kỹ năng",
       data: { _id: skill._id, status: skill.status },
