@@ -60,6 +60,24 @@ export const login = async (email, password, deviceId) => {
   const user = await User.findOne({ email, authType: 'local' });
   if (!user) throw new Error('Invalid credentials');
 
+  // Check if banned
+  if (user.status === 'banned') {
+    if (user.banExpiresAt && new Date() > user.banExpiresAt) {
+      // Tự động mở khóa
+      user.status = 'active';
+      user.banReason = null;
+      user.banExpiresAt = null;
+      await user.save();
+    } else {
+      const error = new Error('Tài khoản của bạn đã bị khóa.');
+      error.isBanned = true;
+      error.banReason = user.banReason;
+      error.banExpiresAt = user.banExpiresAt;
+      error.userId = user._id;
+      throw error;
+    }
+  }
+
   // Check locks
   if (user.lockUntil && user.lockUntil > new Date()) {
     throw new Error(`Tài khoàn đang bị khóa vui lòng thử lại sau.`);

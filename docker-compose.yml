@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # Database PostgreSQL với extension PostGIS
+  postgres:
+    image: postgis/postgis:15-3.3-alpine
+    container_name: safelink-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: safelink
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Database MongoDB
+  mongo:
+    image: mongo:6-jammy
+    container_name: safelink-mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  # Node.js Back-end
+  backend:
+    build:
+      context: ./Back-end
+      dockerfile: Dockerfile
+    container_name: safelink-backend
+    restart: always
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./Back-end/.env
+    # Override environment vars mapping to docker network if needed
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/safelink
+      - POSTGRES_URI=postgresql://postgres:123456@postgres:5432/safelink
+    depends_on:
+      - mongo
+      - postgres
+
+  # React Vite AdminWeb
+  adminweb:
+    build:
+      context: ./AdminWeb
+      dockerfile: Dockerfile
+    container_name: safelink-adminweb
+    restart: always
+    ports:
+      - "8080:80"
+
+  # React Native Expo Front-end
+  frontend:
+    build:
+      context: ./Front-end
+      dockerfile: Dockerfile
+    container_name: safelink-frontend
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      - EXPO_USE_DEV_SERVER=true
+      - REACT_NATIVE_PACKAGER_HOSTNAME=localhost # Có thể cần đổi thành IP máy chủ (ví dụ: 192.168.1.x) để mobile truy cập
+    # Tùy chọn: dùng "--tunnel" ở CMD trong Dockerfile Front-end nếu muốn truy cập qua ngrok không cần IP
+
+volumes:
+  postgres_data:
+  mongo_data:

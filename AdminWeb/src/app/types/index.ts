@@ -109,21 +109,74 @@ export interface DirectoryEntry {
 }
 
 // ==================== SKILL LIBRARY ====================
-export type SkillStatus = 'pending' | 'published' | 'rejected';
+export type SkillStatus = 'pending' | 'active' | 'rejected' | 'hidden';
 
-export interface SkillArticle {
-  id: string;
+export interface SkillStep {
+  order: number;
   title: string;
-  content: string; // HTML content
-  thumbnail?: string;
-  images: string[];
-  category: string;
+  content: string;
+  images: Array<{
+    url: string;
+    publicId?: string;
+  }>;
+}
+
+export interface Skill {
+  _id: string;
+  title: string;
+  summary?: string;
+  category: 'so_cap_cuu' | 'pccc' | 'thien_tai' | 'an_toan_dien' | 'tai_nan' | 'tam_ly' | 'khac';
+  coverImage?: {
+    url: string;
+    publicId?: string;
+  };
+  videoUrl?: string;
+  steps: SkillStep[];
   tags: string[];
-  author: string;
+  difficulty: 'co_ban' | 'trung_binh' | 'nang_cao';
+  duration?: string;
   status: SkillStatus;
-  submittedAt: string;
-  publishedAt?: string;
-  views: number;
+  submittedBy?: {
+    _id: string;
+    name: string;
+    email: string;
+    avatar?: string;
+  };
+  reviewedBy?: string;
+  reviewedAt?: string;
+  rejectReason?: string;
+  viewCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ==================== SOS ALERTS ====================
+export type SOSStatus = 'active' | 'resolved' | 'expired';
+
+export interface SOSPost {
+  _id: string;
+  author: {
+    _id: string;
+    name: string;
+    email: string;
+    avatar?: string;
+    phone?: string;
+  };
+  content?: string;
+  sosCategory: string;
+  sosRadius: number;
+  sosStatus: SOSStatus;
+  location?: {
+    latitude: number;
+    longitude: number;
+    address?: string;
+  };
+  images?: { url: string; thumbnail?: string; large?: string }[];
+  sosResolvedBy?: {
+    _id: string;
+    name: string;
+  };
+  createdAt: string;
 }
 
 // ==================== REPORTS & MODERATION ====================

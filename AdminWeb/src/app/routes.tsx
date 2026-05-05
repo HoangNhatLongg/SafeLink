@@ -4,26 +4,15 @@ import Dashboard from './pages/Dashboard';
 import UserManagement from './pages/UserManagement';
 import VolunteerModeration from './pages/VolunteerModeration';
 import DirectoryModeration from './pages/DirectoryModeration';
+import SkillModeration from './pages/SkillModeration';
+import SosModeration from './pages/SosModeration';
+import AppealManagement from './pages/AppealManagement';
 import Login from './pages/Login';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 
 // Removed DirectoryModeration placeholder
 
-function SkillLibrary() {
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Thư Viện Kỹ Năng</h1>
-        <p className="text-muted-foreground mt-1">
-          Quản lý các bài viết cẩm nang an toàn, PCCC, thoát hiểm
-        </p>
-      </div>
-      <div className="text-center py-12 text-muted-foreground">
-        Trang đang được phát triển...
-      </div>
-    </div>
-  );
-}
+
 
 function ReportModeration() {
   return (
@@ -67,7 +56,9 @@ export const router = createBrowserRouter([
       { path: 'users', Component: UserManagement },
       { path: 'volunteers', Component: VolunteerModeration },
       { path: 'directory', Component: DirectoryModeration },
-      { path: 'skills', Component: SkillLibrary },
+      { path: 'skills', Component: SkillModeration },
+      { path: 'sos', Component: SosModeration },
+      { path: 'appeals', Component: AppealManagement },
       { path: 'reports', Component: ReportModeration },
       { path: '*', Component: NotFound },
     ],

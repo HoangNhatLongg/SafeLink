@@ -339,3 +339,101 @@ export const updatePushToken = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
+
+/* ─────────────────────────────────────────────────────────────
+   GET /api/sos/admin/all
+   Trả về danh sách tất cả SOS cho AdminWeb
+   Query: ?status=active|resolved|expired|all & search= & page= & limit=
+───────────────────────────────────────────────────────────────*/
+export const getAllSOSAdmin = async (req, res) => {
+  try {
+    const { status, search, page = 1, limit = 50 } = req.query;
+    
+    const filter = { postType: "sos" };
+    
+    // Filter theo sosStatus (active, resolved, expired)
+    if (status && status !== 'all') {
+      filter.sosStatus = status;
+    }
+    
+    // Không hiển thị các bài viết đã bị xóa cứng/mềm hoàn toàn bởi Admin
+    // Trừ khi họ chủ động muốn xem (ở đây ta mặc định không hiện 'deleted' status nếu không cần)
+    // Hiện tại post.status = "deleted" được dùng khi user resolve SOS. Vậy ta vẫn lấy, chỉ bỏ qua khi cần.
+    
+    if (search) {
+      filter.$or = [
+        { content: { $regex: search, $options: "i" } },
+        { "location.address": { $regex: search, $options: "i" } },
+      ];
+    }
+
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    const skip = (pageNum - 1) * limitNum;
+
+    const [items, total] = await Promise.all([
+      Post.find(filter)
+        .populate("author", "name email avatar phone")
+        .populate("sosResolvedBy", "name email")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Post.countDocuments(filter),
+    ]);
+
+    return res.json({
+      message: "Lấy danh sách SOS thành công",
+      data: items,
+      meta: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum)
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/* ─────────────────────────────────────────────────────────────
+   DELETE /api/sos/:id
+   Xóa (mềm) SOS bởi Admin
+───────────────────────────────────────────────────────────────*/
+export const deleteSOSAdmin = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const post = await Post.findById(id);
+    if (!post || post.postType !== "sos") {
+      return res.status(404).json({ message: "Không tìm thấy tín hiệu SOS này." });
+    }
+
+    post.status = "deleted"; // Xóa mềm
+    post.deletedAt = new Date();
+    await post.save();
+
+    // Xóa vị trí khỏi hệ thống Postgres GIS để không hiển thị nữa
+    try {
+      await deletePostLocation(id);
+    } catch (gisErr) {
+      console.warn("⚠️ Không thể xóa SOS khỏi PostgreSQL:", gisErr.message);
+    }
+
+    cacheDelPattern("feed:");
+    
+    // Xóa khỏi map realtime
+    try {
+      import("../socket/index.js").then(({ getIo }) => {
+        getIo().emit("sosResolved", { id }); // Tái sử dụng event này để xóa marker trên map
+      });
+    } catch (e) {
+      console.warn("Socket sosResolved error:", e);
+    }
+
+    return res.json({ message: "Đã xóa (ẩn) tín hiệu SOS thành công." });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};

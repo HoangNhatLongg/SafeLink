@@ -11,6 +11,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Shield,
+  AlertTriangle,
+  MessageSquareWarning,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useState } from 'react';
@@ -45,6 +47,11 @@ const navItems: NavItem[] = [
     icon: <Phone className="h-5 w-5" />,
   },
   {
+    title: 'Quản Lý SOS',
+    href: '/sos',
+    icon: <AlertTriangle className="h-5 w-5" />,
+  },
+  {
     title: 'Thư Viện Kỹ Năng',
     href: '/skills',
     icon: <BookOpen className="h-5 w-5" />,
@@ -53,6 +60,11 @@ const navItems: NavItem[] = [
     title: 'Báo Cáo Vi Phạm',
     href: '/reports',
     icon: <Flag className="h-5 w-5" />,
+  },
+  {
+    title: 'Quản Lý Khiếu Nại',
+    href: '/appeals',
+    icon: <MessageSquareWarning className="h-5 w-5" />,
   },
 ];
 

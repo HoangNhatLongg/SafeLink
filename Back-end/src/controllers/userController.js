@@ -1,6 +1,7 @@
 import User from '../models/userModel.js';
 import Follow from '../models/followModel.js';
 import Post from '../models/postModel.js';
+import Appeal from '../models/appealModel.js';
 import {
   getMediaUrl,
   uploadImageToCloudinary,
@@ -8,6 +9,7 @@ import {
   isCloudinaryConfigured,
 } from '../middleware/upload.js';
 import { cacheDelPattern } from '../utils/cache.js';
+import { getIo } from '../socket/index.js';
 
 /* ─────────────────────────────────────────────────────────────
    Helper: serialize profile with privacy rules
@@ -390,3 +392,236 @@ export const getSuggestedUsers = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
+
+/* ─────────────────────────────────────────────────────────────
+   GET /api/users/admin/all
+   Dành cho Admin/Moderator: Lấy toàn bộ danh sách users
+   Query: ?search=&role=&page=&limit=
+───────────────────────────────────────────────────────────────*/
+export const getAllUsersAdmin = async (req, res) => {
+  try {
+    const { search, role, page = 1, limit = 50 } = req.query;
+    
+    const filter = {};
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } }
+      ];
+    }
+    
+    if (role && role !== 'all') {
+      filter.role = role;
+    }
+
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    const skip = (pageNum - 1) * limitNum;
+
+    const [items, total] = await Promise.all([
+      User.find(filter)
+        .select("-password")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      User.countDocuments(filter)
+    ]);
+
+    // Map `status` sang `isActive` cho Frontend khớp cấu trúc cũ
+    const mappedItems = items.map(u => ({
+      id: u._id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      createdAt: u.createdAt,
+      isActive: u.status !== 'banned',
+    }));
+
+    return res.json({
+      message: "Thành công",
+      data: mappedItems,
+      meta: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum)
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/* ─────────────────────────────────────────────────────────────
+   PATCH /api/users/admin/:id/role
+   Dành cho Admin: Cập nhật chức vụ
+───────────────────────────────────────────────────────────────*/
+export const updateUserRole = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { role } = req.body; // admin, moderator, user
+
+    // Validate role
+    if (!['admin', 'moderator', 'user'].includes(role)) {
+      return res.status(400).json({ message: "Vai trò không hợp lệ." });
+    }
+
+    // Không cho phép tự đổi quyền của mình
+    if (req.user._id.toString() === id) {
+      return res.status(403).json({ message: "Bạn không thể tự thay đổi quyền của chính mình." });
+    }
+
+    const targetUser = await User.findById(id);
+    if (!targetUser) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng." });
+    }
+
+    targetUser.role = role;
+    await targetUser.save();
+
+    return res.json({ message: `Đã thay đổi quyền thành ${role}.` });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/* ─────────────────────────────────────────────────────────────
+   PATCH /api/users/admin/:id/status
+   Dành cho Admin/Moderator: Khóa/Mở khóa tài khoản
+───────────────────────────────────────────────────────────────*/
+export const updateUserStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isActive, banReason, banDuration } = req.body;
+    // banDuration: number (ngày), null/0 = vĩnh viễn
+
+    // Không tự khóa mình
+    if (req.user._id.toString() === id) {
+      return res.status(403).json({ message: "Bạn không thể tự khóa tài khoản của mình." });
+    }
+
+    const targetUser = await User.findById(id);
+    if (!targetUser) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng." });
+    }
+
+    // Nếu người thực hiện là moderator, chỉ được khóa/mở khóa 'user'
+    if (req.user.role === 'moderator' && targetUser.role !== 'user') {
+      return res.status(403).json({ message: "Moderator chỉ có quyền khóa tài khoản người dùng bình thường." });
+    }
+
+    if (isActive) {
+      // Mở khóa
+      targetUser.status = 'active';
+      targetUser.banReason = null;
+      targetUser.banExpiresAt = null;
+    } else {
+      // Khóa tài khoản
+      targetUser.status = 'banned';
+      targetUser.banReason = banReason || 'Vi phạm quy định cộng đồng';
+      if (banDuration && banDuration > 0) {
+        targetUser.banExpiresAt = new Date(Date.now() + banDuration * 24 * 60 * 60 * 1000);
+      } else {
+        targetUser.banExpiresAt = null; // Khóa vĩnh viễn
+      }
+    }
+    await targetUser.save();
+
+    // Emit socket event để đẩy user đang online ra ngay lập tức
+    if (!isActive) {
+      try {
+        const io = getIo();
+        io.to(id).emit('forceBanned', {
+          banReason: targetUser.banReason,
+          banExpiresAt: targetUser.banExpiresAt,
+        });
+      } catch (e) {
+        console.warn('Socket emit forceBanned failed:', e.message);
+      }
+    }
+
+    return res.json({ message: isActive ? "Đã mở khóa tài khoản." : "Đã khóa tài khoản." });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/* ─────────────────────────────────────────────────────────────
+   GET /api/users/admin/appeals
+   Dành cho Admin/Moderator: Lấy danh sách khiếu nại
+───────────────────────────────────────────────────────────────*/
+export const getAppeals = async (req, res) => {
+  try {
+    const { status = 'all', page = 1, limit = 50 } = req.query;
+    const filter = {};
+    if (status !== 'all') filter.status = status;
+
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    const skip = (pageNum - 1) * limitNum;
+
+    const [items, total] = await Promise.all([
+      Appeal.find(filter)
+        .populate('userId', 'name email avatar')
+        .populate('reviewedBy', 'name')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Appeal.countDocuments(filter),
+    ]);
+
+    return res.json({
+      data: items,
+      meta: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/* ─────────────────────────────────────────────────────────────
+   PATCH /api/users/admin/appeals/:id
+   Dành cho Admin/Moderator: Duyệt/Từ chối khiếu nại
+───────────────────────────────────────────────────────────────*/
+export const reviewAppeal = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action, adminReply } = req.body; // action: 'approved' | 'rejected'
+
+    if (!['approved', 'rejected'].includes(action)) {
+      return res.status(400).json({ message: "Hành động không hợp lệ." });
+    }
+
+    const appeal = await Appeal.findById(id);
+    if (!appeal) {
+      return res.status(404).json({ message: "Không tìm thấy khiếu nại." });
+    }
+
+    appeal.status = action;
+    appeal.adminReply = adminReply || '';
+    appeal.reviewedBy = req.user._id;
+    appeal.reviewedAt = new Date();
+    await appeal.save();
+
+    // Nếu duyệt khiếu nại -> mở khóa tài khoản
+    if (action === 'approved') {
+      await User.findByIdAndUpdate(appeal.userId, {
+        status: 'active',
+        banReason: null,
+        banExpiresAt: null,
+      });
+    }
+
+    return res.json({ message: action === 'approved' ? "Đã chấp nhận khiếu nại và mở khóa tài khoản." : "Đã từ chối khiếu nại." });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+

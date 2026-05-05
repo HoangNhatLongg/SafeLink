@@ -12,6 +12,13 @@ export function setSessionExpiredHandler(handler: ((serverMessage?: string) => v
   onSessionExpired = handler;
 }
 
+/** Gọi khi tài khoản bị khóa (403 banned). Đăng ký từ Root layout. */
+let onBanned: ((info: { banReason?: string; banExpiresAt?: string | null }) => void) | null = null;
+
+export function setBannedHandler(handler: typeof onBanned) {
+  onBanned = handler;
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -76,6 +83,14 @@ export async function parseJson<T = any>(res: Response): Promise<T> {
           onSessionExpired?.(typeof data.message === "string" ? data.message : undefined);
         }
       }
+    }
+    // Kiểm tra nếu tài khoản bị khóa (403 banned)
+    if (res.status === 403 && data.message?.includes('bị khóa')) {
+      await clearSession();
+      onBanned?.({
+        banReason: data.banReason,
+        banExpiresAt: data.banExpiresAt,
+      });
     }
     const msg = data.message || `Lỗi ${res.status}`;
     const extra =

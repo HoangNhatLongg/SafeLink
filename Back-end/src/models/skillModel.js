@@ -47,7 +47,7 @@ const skillSchema = new mongoose.Schema(
     duration: { type: String, trim: true, maxlength: 50 },
     status: {
       type: String,
-      enum: ["active", "pending", "rejected"],
+      enum: ["active", "pending", "rejected", "hidden"],
       default: "pending",
       index: true,
     },

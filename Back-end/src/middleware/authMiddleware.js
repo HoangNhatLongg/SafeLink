@@ -30,7 +30,12 @@ export const verifyToken = async (req, res, next) => {
     }
 
     if (user.status === "banned") {
-      return res.status(403).json({ message: "Tài khoản đã bị khóa." });
+      return res.status(403).json({ 
+        message: "Tài khoản đã bị khóa.",
+        banReason: user.banReason,
+        banExpiresAt: user.banExpiresAt,
+        userId: user._id
+      });
     }
 
     // Attach user to request

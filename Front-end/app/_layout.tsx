@@ -9,10 +9,10 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useEffect } from 'react';
 import { Alert, LogBox } from 'react-native';
-import { setSessionExpiredHandler } from '@/features/api/http';
+import { setSessionExpiredHandler, setBannedHandler } from '@/features/api/http';
 import { registerForPushNotificationsAsync } from '@/features/SOS/notificationSetup';
 import { uploadPushToken, updateLocation } from '@/features/SOS/sosApi';
-import { getToken } from '@/features/auth/utils/storage';
+import { getToken, clearSession } from '@/features/auth/utils/storage';
 import * as Location from 'expo-location';
 import Constants, { ExecutionEnvironment } from "expo-constants";
 
@@ -53,6 +53,19 @@ export default function RootLayout() {
     });
     return () => setSessionExpiredHandler(null);
   }, [router, t]);
+
+  // Khi tài khoản bị khóa (bắt từ API interceptor)
+  useEffect(() => {
+    setBannedHandler(async (info) => {
+      await clearSession();
+      Alert.alert(
+        "🚫 Tài khoản đã bị khóa",
+        `Lý do: ${info?.banReason || 'Vi phạm quy định'}\nThời hạn: ${info?.banExpiresAt ? new Date(info.banExpiresAt).toLocaleString('vi-VN') : 'Vĩnh viễn'}`,
+        [{ text: "Đăng nhập lại", onPress: () => router.replace("/login") }]
+      );
+    });
+    return () => setBannedHandler(null);
+  }, [router]);
 
   // SOS & Notifications Setup
   useEffect(() => {
@@ -137,6 +150,16 @@ export default function RootLayout() {
         socket.on('volunteerRejected', () => {
           Alert.alert("❌ Đơn bị từ chối", "Đơn đăng ký Đội Cứu Hộ của bạn đã bị từ chối. Vui lòng kiểm tra trạng thái để xem lý do và gửi yêu cầu mới.");
         });
+
+        // Khi Admin khóa tài khoản: đẩy user ra ngay lập tức
+        socket.on('forceBanned', async (data: any) => {
+          await clearSession();
+          Alert.alert(
+            "🚫 Tài khoản đã bị khóa",
+            `Lý do: ${data?.banReason || 'Vi phạm quy định'}\nThời hạn: ${data?.banExpiresAt ? new Date(data.banExpiresAt).toLocaleString('vi-VN') : 'Vĩnh viễn'}`,
+            [{ text: "Đăng nhập lại", onPress: () => router.replace("/login") }]
+          );
+        });
       } catch (e) {
         console.warn("Global socket listener setup error", e);
       }
@@ -153,6 +176,7 @@ export default function RootLayout() {
           socket.off('newDirectory');
           socket.off('volunteerApproved');
           socket.off('volunteerRejected');
+          socket.off('forceBanned');
         }
       });
     };

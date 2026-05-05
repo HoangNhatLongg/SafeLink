@@ -70,6 +70,8 @@ const userSchema = new mongoose.Schema(
       enum: ['active', 'banned'],
       default: 'active',
     },
+    banReason: { type: String, default: null },
+    banExpiresAt: { type: Date, default: null },
     profile: { type: profileSchema, default: () => ({}) },
     devices: [
       {

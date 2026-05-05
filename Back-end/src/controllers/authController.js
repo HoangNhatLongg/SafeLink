@@ -1,4 +1,5 @@
 import * as authService from "../services/authService.js";
+import Appeal from '../models/appealModel.js';
 
 export const registerRequest = async (req, res) => {
   try {
@@ -44,6 +45,15 @@ export const loginUser = async (req, res) => {
       }
     });
   } catch (err) {
+    if (err.isBanned) {
+      return res.status(403).json({
+        message: err.message,
+        isBanned: true,
+        banReason: err.banReason,
+        banExpiresAt: err.banExpiresAt,
+        userId: err.userId
+      });
+    }
     res.status(400).json({ message: err.message });
   }
 };
@@ -99,6 +109,25 @@ export const logoutUser = async (req, res) => {
     }
     await authService.logout(token);
     return res.json({ message: "Đã đăng xuất." });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+export const createAppeal = async (req, res) => {
+  try {
+    const { userId, reason } = req.body;
+    if (!userId || !reason) {
+      return res.status(400).json({ message: "Vui lòng cung cấp đủ thông tin." });
+    }
+
+    const existingAppeal = await Appeal.findOne({ userId, status: 'pending' });
+    if (existingAppeal) {
+      return res.status(400).json({ message: "Bạn đã gửi khiếu nại trước đó, vui lòng chờ ban quản trị phản hồi." });
+    }
+
+    await Appeal.create({ userId, reason });
+    return res.status(201).json({ message: "Gửi khiếu nại thành công. Vui lòng đợi phản hồi." });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }

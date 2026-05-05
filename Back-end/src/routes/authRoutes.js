@@ -8,6 +8,7 @@ import {
   forgotPassword,
   resetPassword,
   logoutUser,
+  createAppeal,
 } from "../controllers/authController.js";
 import { verifyToken } from "../middleware/authMiddleware.js";
 import { issueAuthToken } from "../services/authService.js";
@@ -22,6 +23,7 @@ router.post("/verify-device", verifyDeviceLogin);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
 router.post("/logout", verifyToken, logoutUser);
+router.post("/appeal", createAppeal);
 
 /* Google login */
 router.get(

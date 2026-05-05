@@ -26,23 +26,24 @@ export const initSocket = (server) => {
   });
 
   io.on("connection", (socket) => {
-    console.log(`🔌 User connected: ${socket.user?.id} (Socket ID: ${socket.id})`);
+    const userId = socket.user?.userId || socket.user?.id;
+    console.log(`🔌 User connected: ${userId} (Socket ID: ${socket.id})`);
 
     // Tự động cho user vào một room mang tên ID của chính họ để gửi thông báo cá nhân
-    if (socket.user?.id) {
-      socket.join(socket.user.id);
+    if (userId) {
+      socket.join(userId);
     }
 
     // Tham gia vào phòng chat (room = connectionId)
     socket.on("joinChat", (connectionId) => {
       socket.join(connectionId);
-      console.log(`User ${socket.user?.id} joined chat room: ${connectionId}`);
+      console.log(`User ${userId} joined chat room: ${connectionId}`);
     });
 
     // Rời khỏi phòng chat
     socket.on("leaveChat", (connectionId) => {
       socket.leave(connectionId);
-      console.log(`User ${socket.user?.id} left chat room: ${connectionId}`);
+      console.log(`User ${userId} left chat room: ${connectionId}`);
     });
 
     // Lắng nghe tin nhắn mới và broadcast cho những người trong phòng
@@ -64,7 +65,8 @@ export const initSocket = (server) => {
     });
 
     socket.on("disconnect", () => {
-      console.log(`🔌 User disconnected: ${socket.user?.id} (Socket ID: ${socket.id})`);
+      const userId = socket.user?.userId || socket.user?.id;
+      console.log(`🔌 User disconnected: ${userId} (Socket ID: ${socket.id})`);
     });
   });
 

@@ -52,7 +52,7 @@ function getYouTubeEmbedUrl(url?: string): string | null {
   } catch {
     return null;
   }
-  return videoId ? `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1` : null;
+  return videoId ? `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&origin=https://safelink.com` : null;
 }
 
 export default function SkillDetailScreen() {
@@ -175,7 +175,24 @@ export default function SkillDetailScreen() {
         {embedUrl && (
           <View style={styles.videoContainer}>
             <WebView
-              source={{ uri: embedUrl }}
+              originWhitelist={['*']}
+              source={{ 
+                html: `
+                  <!DOCTYPE html>
+                  <html>
+                    <head>
+                      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                      <style>
+                        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #000; }
+                        iframe { width: 100%; height: 100%; border: none; }
+                      </style>
+                    </head>
+                    <body>
+                      <iframe src="${embedUrl}" referrerpolicy="strict-origin-when-cross-origin" allow="autoplay; fullscreen" allowfullscreen></iframe>
+                    </body>
+                  </html>
+                `
+              }}
               style={styles.video}
               allowsInlineMediaPlayback
               mediaPlaybackRequiresUserAction={false}

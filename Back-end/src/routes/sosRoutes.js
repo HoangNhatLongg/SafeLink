@@ -7,7 +7,10 @@ import {
   resolveSOS,
   updateUserLocation,
   updatePushToken,
+  getAllSOSAdmin,
+  deleteSOSAdmin,
 } from "../controllers/sosController.js";
+import { requireModerator } from "../middleware/roleMiddleware.js";
 import {
   requestToHelp,
   getConnections,
@@ -42,6 +45,14 @@ router.patch("/me/location", verifyToken, updateUserLocation);
 
 // Lưu Expo Push Token
 router.patch("/me/push-token", verifyToken, updatePushToken);
+
+// ========================
+// Chức năng cho Admin
+// ========================
+// Lấy danh sách SOS
+router.get("/admin/all", verifyToken, requireModerator, getAllSOSAdmin);
+// Xóa SOS
+router.delete("/:id", verifyToken, requireModerator, deleteSOSAdmin);
 
 // ========================
 // Chức năng kết nối & Chat

@@ -11,11 +11,18 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { useAuthStore } from '../../stores/authStore';
+import { useNotificationStore } from '../../stores/notificationStore';
 import { useState, useEffect } from 'react';
+import { formatDistanceToNow } from 'date-fns';
+import { vi } from 'date-fns/locale';
+import { Link } from 'react-router';
 
 export function Header() {
   const { user, logout } = useAuthStore();
+  const { notifications, markAllAsRead, markAsRead } = useNotificationStore();
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   useEffect(() => {
     // Kiểm tra theme từ localStorage hoặc system preference
@@ -89,14 +96,50 @@ export function Header() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="relative">
                 <Bell className="h-5 w-5" />
-                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                    {unreadCount}
+                  </span>
+                )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-80">
-              <DropdownMenuLabel>Thông Báo Mới</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <div className="p-4 text-sm text-muted-foreground text-center">
-                Không có thông báo mới
+              <div className="flex items-center justify-between px-4 py-2 border-b">
+                <span className="font-semibold text-sm">Thông Báo Mới</span>
+                {unreadCount > 0 && (
+                  <Button variant="ghost" size="sm" className="h-auto px-2 py-1 text-xs text-muted-foreground" onClick={markAllAsRead}>
+                    Đánh dấu đã đọc
+                  </Button>
+                )}
+              </div>
+              <div className="max-h-[300px] overflow-y-auto">
+                {notifications.length === 0 ? (
+                  <div className="p-4 text-sm text-muted-foreground text-center">
+                    Không có thông báo mới
+                  </div>
+                ) : (
+                  notifications.map((notif) => (
+                    <DropdownMenuItem 
+                      key={notif.id} 
+                      className={`flex flex-col items-start p-3 gap-1 cursor-pointer border-b last:border-0 ${!notif.isRead ? 'bg-red-50/50' : ''}`}
+                      onClick={() => markAsRead(notif.id)}
+                      asChild
+                    >
+                      <Link to="/sos">
+                        <div className="flex items-center gap-2 w-full">
+                          <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
+                          <span className="font-semibold text-sm line-clamp-1 flex-1">SOS từ {notif.authorName}</span>
+                          <span className="text-[10px] text-muted-foreground shrink-0">
+                            {formatDistanceToNow(new Date(notif.timestamp), { addSuffix: true, locale: vi })}
+                          </span>
+                        </div>
+                        <span className="text-xs text-muted-foreground pl-4">
+                          Loại: {getSOSCategoryText(notif.category)}
+                        </span>
+                      </Link>
+                    </DropdownMenuItem>
+                  ))
+                )}
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -137,4 +180,19 @@ export function Header() {
       </div>
     </header>
   );
+}
+
+function getSOSCategoryText(cat: string) {
+  const map: Record<string, string> = {
+    fire: 'Cháy nổ',
+    landslide: 'Sạt lở',
+    traffic: 'Tai nạn giao thông',
+    robbery: 'Trộm cướp',
+    medical: 'Cấp cứu y tế',
+    flood: 'Lụt lội',
+    sos_support: 'Đội SOS',
+    vehicle_repair: 'Sửa xe',
+    other: 'Khác',
+  };
+  return map[cat] || 'Khác';
 }
