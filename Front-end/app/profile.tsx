@@ -39,7 +39,7 @@ const AVATAR_SIZE = 90;
 const TAB_MY   = "posts";
 const TAB_SAVE = "saved";
 
-const FALLBACK = require("../../Uploads/AnhDaiDien.jpg");
+const FALLBACK = require("../../assets/images/avatar-default.jpg");
 
 function getAvatarSrc(uri?: string) {
   if (uri && uri.startsWith("http")) return { uri };

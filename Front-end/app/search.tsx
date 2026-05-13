@@ -25,7 +25,7 @@ const TABS = [
   { key: "locations", label: "Địa điểm" },
 ];
 
-const FALLBACK = require("../../Uploads/AnhDaiDien.jpg");
+const FALLBACK = require("../../assets/images/avatar-default.jpg");
 
 function getAvatarSrc(uri?: string) {
   if (uri && uri.startsWith("http")) return { uri };

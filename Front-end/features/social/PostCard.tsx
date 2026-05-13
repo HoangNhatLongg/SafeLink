@@ -47,7 +47,7 @@ type Props = {
   onHidden?: (id: string) => void;
 };
 
-const FALLBACK_AVATAR = require("../../Uploads/AnhDaiDien.jpg");
+const FALLBACK_AVATAR = require("../../assets/images/avatar-default.jpg");
 
 function getAvatarSource(avatar: string | number) {
   if (typeof avatar === "number") return avatar; // local require()
