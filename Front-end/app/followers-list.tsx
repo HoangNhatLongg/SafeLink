@@ -78,7 +78,7 @@ export default function FollowersListScreen() {
         onPress={() => router.push({ pathname: "/user/[id]", params: { id: item._id } })}
       >
         <Image 
-          source={item.avatar ? { uri: item.avatar } : require("@/Uploads/AnhDaiDien.jpg")} 
+          source={item.avatar ? { uri: item.avatar } : require("../../Uploads/AnhDaiDien.jpg")} 
           style={styles.avatar} 
         />
         <View style={{ flex: 1 }}>

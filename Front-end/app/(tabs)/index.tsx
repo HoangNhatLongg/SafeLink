@@ -250,7 +250,7 @@ function FeedHeader({ router, me }: { router: any; me: StoredUser | null }) {
   const avatarSource =
     me?.avatar && me.avatar.startsWith("http")
       ? { uri: me.avatar }
-      : require("@/Uploads/AnhDaiDien.jpg");
+      : require("../../Uploads/AnhDaiDien.jpg");
 
   return (
     <View style={styles.headerContainer}>

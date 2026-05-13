@@ -23,7 +23,7 @@ import { Image as ExpoImage } from "expo-image";
 
 const AVATAR_SIZE = 90;
 const COVER_HEIGHT = 160;
-const FALLBACK = require("@/Uploads/AnhDaiDien.jpg");
+const FALLBACK = require("../../Uploads/AnhDaiDien.jpg");
 
 function getAvatarSrc(uri?: string) {
   if (uri && uri.startsWith("http")) return { uri };
