@@ -24,10 +24,10 @@ interface Props {
   onTypeChange: (type: AgencyType | "") => void;
   selectedProvince: string;
   onProvinceChange: (province: string) => void;
-  selectedDistrict: string;
-  onDistrictChange: (district: string) => void;
+  selectedWard: string;
+  onWardChange: (ward: string) => void;
   provinces: string[];
-  districts: string[];
+  wards: string[];
 }
 
 const TYPES: Array<{ key: AgencyType; label: string }> = [
@@ -50,13 +50,13 @@ export function FilterBar({
   onTypeChange,
   selectedProvince,
   onProvinceChange,
-  selectedDistrict,
-  onDistrictChange,
+  selectedWard,
+  onWardChange,
   provinces,
-  districts,
+  wards,
 }: Props) {
   const [showProvincePicker, setShowProvincePicker] = useState(false);
-  const [showDistrictPicker, setShowDistrictPicker] = useState(false);
+  const [showWardPicker, setShowWardPicker] = useState(false);
 
   return (
     <View style={styles.container}>
@@ -97,7 +97,7 @@ export function FilterBar({
         >
           <Ionicons name="filter" size={14} color={mode === "location" ? "#fff" : "#555"} />
           <Text style={[styles.modeBtnText, mode === "location" && styles.modeBtnTextActive]}>
-            Lọc tỉnh/huyện
+            Lọc Tỉnh/Xã
           </Text>
         </TouchableOpacity>
       </View>
@@ -117,11 +117,11 @@ export function FilterBar({
 
           <TouchableOpacity
             style={styles.locationPickerBtn}
-            onPress={() => setShowDistrictPicker(true)}
+            onPress={() => setShowWardPicker(true)}
             disabled={!selectedProvince}
           >
             <Text style={[styles.locationPickerText, !selectedProvince && { color: "#bbb" }]} numberOfLines={1}>
-              {selectedDistrict || "Chọn Huyện"}
+              {selectedWard || "Chọn Phường/Xã"}
             </Text>
             <Ionicons name="chevron-down" size={14} color="#666" />
           </TouchableOpacity>
@@ -164,24 +164,24 @@ export function FilterBar({
         selected={selectedProvince}
         onSelect={(v) => {
           onProvinceChange(v);
-          onDistrictChange("");
+          onWardChange("");
           setShowProvincePicker(false);
         }}
         onClose={() => setShowProvincePicker(false)}
         showAll
       />
 
-      {/* District picker modal */}
+      {/* Ward picker modal */}
       <PickerModal
-        visible={showDistrictPicker}
-        title="Chọn Huyện/Quận"
-        items={districts}
-        selected={selectedDistrict}
+        visible={showWardPicker}
+        title="Chọn Phường/Xã"
+        items={wards}
+        selected={selectedWard}
         onSelect={(v) => {
-          onDistrictChange(v);
-          setShowDistrictPicker(false);
+          onWardChange(v);
+          setShowWardPicker(false);
         }}
-        onClose={() => setShowDistrictPicker(false)}
+        onClose={() => setShowWardPicker(false)}
         showAll
       />
     </View>

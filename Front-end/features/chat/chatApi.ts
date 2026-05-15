@@ -44,7 +44,7 @@ export async function updateConnectionStatus(
   return parseJson(res);
 }
 
-export async function getChatHistory(connectionId: string): Promise<{ messages: ChatMessage[] }> {
+export async function getChatHistory(connectionId: string): Promise<{ messages: ChatMessage[]; connection?: SOSConnection }> {
   const res = await apiFetch(`/api/sos/connections/${connectionId}/messages`);
   return parseJson(res);
 }
@@ -92,6 +92,20 @@ export async function deleteMessage(
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({}),
+  });
+  return parseJson(res);
+}
+
+export async function deleteConnectionRecord(connectionId: string): Promise<{ message: string }> {
+  const res = await apiFetch(`/api/sos/connections/${connectionId}`, {
+    method: "DELETE",
+  });
+  return parseJson(res);
+}
+
+export async function resolveSOS(sosId: string): Promise<{ message: string; sosStatus: string }> {
+  const res = await apiFetch(`/api/sos/${sosId}/resolve`, {
+    method: "PATCH",
   });
   return parseJson(res);
 }

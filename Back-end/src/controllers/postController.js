@@ -679,6 +679,9 @@ export const reportPost = async (req, res) => {
 
     await Report.create({ post: id, reporter: userId, reason, description });
 
+    // ĐỒNG BỘ: Ẩn bài viết khỏi bảng tin của người báo cáo
+    await Post.findByIdAndUpdate(id, { $addToSet: { hiddenBy: userId } });
+
     return res.status(201).json({ message: "Đã gửi báo cáo. Chúng tôi sẽ xem xét sớm nhất." });
   } catch (err) {
     console.error("reportPost error:", err);

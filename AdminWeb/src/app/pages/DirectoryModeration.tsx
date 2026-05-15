@@ -27,6 +27,7 @@ import { Plus, Search, MapPin, Phone, MoreHorizontal, Edit, Trash2, CheckCircle,
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
+import { provinceApi, Province } from '../services/provinceApi';
 
 export default function DirectoryModeration() {
   const queryClient = useQueryClient();
@@ -49,6 +50,11 @@ export default function DirectoryModeration() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['directories', activeTab, search],
     queryFn: () => directoryApi.getAll({ status: activeTab, search }),
+  });
+
+  const { data: provincesData = [] } = useQuery({
+    queryKey: ['provinces'],
+    queryFn: () => provinceApi.getAll(),
   });
 
   // Mutations
@@ -144,6 +150,9 @@ export default function DirectoryModeration() {
     };
     return map[type] || 'Khác';
   };
+
+  const selectedProvinceData = provincesData.find((p: Province) => p.name === currentEntry.province);
+  const wards = selectedProvinceData ? selectedProvinceData.wards : [];
 
   return (
     <div className="space-y-6">
@@ -344,11 +353,38 @@ export default function DirectoryModeration() {
 
               <div className="space-y-2">
                 <Label>Tỉnh / Thành phố *</Label>
-                <Input required value={currentEntry.province || ''} onChange={e => setCurrentEntry({...currentEntry, province: e.target.value})} placeholder="Hà Nội" />
+                <Select 
+                  value={currentEntry.province || ''} 
+                  onValueChange={v => {
+                    setCurrentEntry({...currentEntry, province: v, ward: '', district: ''});
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn Tỉnh / Thành phố" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {provincesData.map((p: any) => (
+                      <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
-                <Label>Quận / Huyện</Label>
-                <Input value={currentEntry.district || ''} onChange={e => setCurrentEntry({...currentEntry, district: e.target.value})} placeholder="Cầu Giấy" />
+                <Label>Phường / Xã</Label>
+                <Select 
+                  value={currentEntry.ward || ''} 
+                  onValueChange={v => setCurrentEntry({...currentEntry, ward: v})}
+                  disabled={!currentEntry.province}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={currentEntry.province ? "Chọn Phường / Xã" : "Chọn Tỉnh trước"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {wards.map((w: string) => (
+                      <SelectItem key={w} value={w}>{w}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">

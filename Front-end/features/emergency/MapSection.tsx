@@ -60,7 +60,6 @@ export default function MapSection({ location, agencies, onMarkerPress }: Props)
             key={item._id ?? item.name}
             coordinate={{ latitude: item.lat, longitude: item.lng }}
             onPress={() => onMarkerPress?.(item)}
-            tracksViewChanges={false}
           >
             <View style={[styles.customMarker, { backgroundColor: pinColor }]}>
               <Text style={styles.customMarkerText}>{icon}</Text>

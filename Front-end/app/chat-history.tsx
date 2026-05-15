@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getMyConnections, updateConnectionStatus, type SOSConnection } from "@/features/chat/chatApi";
+import { getMyConnections, updateConnectionStatus, deleteConnectionRecord, type SOSConnection } from "@/features/chat/chatApi";
 import { getUserJson, type StoredUser } from "@/features/auth/utils/storage";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
@@ -60,6 +60,29 @@ export default function ChatHistoryScreen() {
     }
   };
 
+  const handleDeleteConnection = (id: string) => {
+    Alert.alert(
+      "Xóa cuộc trò chuyện",
+      "Bạn có chắc chắn muốn xóa cuộc trò chuyện này không? Toàn bộ tin nhắn sẽ bị xóa vĩnh viễn.",
+      [
+        { text: "Hủy", style: "cancel" },
+        { 
+          text: "Xóa", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteConnectionRecord(id);
+              Alert.alert("Thành công", "Đã xóa cuộc trò chuyện.");
+              setConnections((prev) => prev.filter(c => c._id !== id));
+            } catch (e: any) {
+              Alert.alert("Lỗi", e.message || "Không thể xóa cuộc trò chuyện.");
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const renderItem = ({ item }: { item: SOSConnection }) => {
     const isSender = currentUser?.id === item.senderId?._id;
     const otherUser = isSender ? item.helperId : item.senderId;
@@ -89,6 +112,7 @@ export default function ChatHistoryScreen() {
             router.push(`/chat/${item._id}`);
           }
         }}
+        onLongPress={() => handleDeleteConnection(item._id)}
       >
         <View style={styles.cardHeader}>
           <View style={styles.userInfo}>

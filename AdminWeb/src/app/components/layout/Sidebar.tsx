@@ -13,6 +13,7 @@ import {
   Shield,
   AlertTriangle,
   MessageSquareWarning,
+  MapPin,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useState } from 'react';
@@ -50,6 +51,12 @@ const navItems: NavItem[] = [
     title: 'Quản Lý SOS',
     href: '/sos',
     icon: <AlertTriangle className="h-5 w-5" />,
+  },
+  {
+    title: 'Quản Lý Tỉnh/Xã',
+    href: '/provinces',
+    icon: <MapPin className="h-5 w-5" />,
+    adminOnly: true,
   },
   {
     title: 'Thư Viện Kỹ Năng',

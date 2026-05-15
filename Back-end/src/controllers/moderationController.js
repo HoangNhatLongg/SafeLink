@@ -21,7 +21,7 @@ export const listReports = async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate("post")
+        .populate({ path: "post", populate: { path: "author", select: "name email avatar" } })
         .populate("reporter", "name email")
         .populate("reviewedBy", "name email")
         .lean(),
@@ -45,15 +45,15 @@ export const listReports = async (req, res) => {
 
 /**
  * PATCH /api/moderation/reports/:id
- * Body: { status: "reviewed"|"dismissed"|"actioned", flagPost?: boolean }
+ * Body: { status: "pending"|"reviewed"|"dismissed"|"actioned", flagPost?: boolean, restorePost?: boolean }
  */
 export const updateReport = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, flagPost } = req.body;
+    const { status, flagPost, restorePost } = req.body;
 
-    if (!["reviewed", "dismissed", "actioned"].includes(status)) {
-      return res.status(400).json({ message: "status phải là reviewed, dismissed hoặc actioned." });
+    if (!["pending", "reviewed", "dismissed", "actioned"].includes(status)) {
+      return res.status(400).json({ message: "status phải là pending, reviewed, dismissed hoặc actioned." });
     }
 
     const report = await Report.findById(id);
@@ -66,10 +66,12 @@ export const updateReport = async (req, res) => {
 
     if (flagPost && status === "actioned") {
       await Post.findByIdAndUpdate(report.post, { status: "flagged" });
+    } else if (restorePost) {
+      await Post.findByIdAndUpdate(report.post, { status: "active" });
     }
 
     const populated = await Report.findById(report._id)
-      .populate("post")
+      .populate({ path: "post", populate: { path: "author", select: "name email avatar" } })
       .populate("reporter", "name email")
       .populate("reviewedBy", "name email")
       .lean();

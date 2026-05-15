@@ -11,11 +11,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  FlatList,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { AgencyType, ContributePayload } from "./types";
 import { AGENCY_TYPE_LABELS, AGENCY_TYPE_COLORS, AGENCY_TYPE_ICONS } from "./types";
 import { contributeDirectory } from "./directoryApi";
+import { fetchProvinces, Province, sortWards } from "./provinceApi";
 
 interface Props {
   visible: boolean;
@@ -37,10 +39,22 @@ export default function ContributeModal({ visible, onClose, userLocation }: Prop
   const [latStr, setLatStr] = useState(userLocation ? String(userLocation.latitude) : "");
   const [lngStr, setLngStr] = useState(userLocation ? String(userLocation.longitude) : "");
   const [submitting, setSubmitting] = useState(false);
+  const [provincesData, setProvincesData] = useState<Province[]>([]);
+  const [showProvincePicker, setShowProvincePicker] = useState(false);
+  const [showWardPicker, setShowWardPicker] = useState(false);
+
+  React.useEffect(() => {
+    if (visible) {
+      fetchProvinces().then(setProvincesData).catch(console.error);
+    }
+  }, [visible]);
+
+  const selectedProvinceData = provincesData.find(p => p.name === province);
+  const wards = selectedProvinceData ? sortWards(selectedProvinceData.wards) : [];
 
   const reset = () => {
     setName(""); setPhone(""); setAddress(""); setProvince("");
-    setDistrict(""); setWard(""); setType("csgt"); setNote("");
+    setWard(""); setType("csgt"); setNote("");
     setLatStr(userLocation ? String(userLocation.latitude) : "");
     setLngStr(userLocation ? String(userLocation.longitude) : "");
   };
@@ -61,7 +75,7 @@ export default function ContributeModal({ visible, onClose, userLocation }: Prop
 
     const payload: ContributePayload = {
       name: name.trim(), phone: phone.trim(), address: address.trim(),
-      province: province.trim(), district: district.trim() || undefined,
+      province: province.trim(), district: undefined, // Quận/Huyện không sử dụng trong hệ thống 2 cấp
       ward: ward.trim() || undefined, type, lat, lng,
       note: note.trim() || undefined,
     };
@@ -113,12 +127,36 @@ export default function ContributeModal({ visible, onClose, userLocation }: Prop
             })}
           </ScrollView>
 
-          <Field label="Tên đơn vị *" value={name} onChangeText={setName} placeholder="VD: Phòng CSGT Công an Quận 1" />
+          <Field label="Tên đơn vị *" value={name} onChangeText={setName} placeholder="VD: Công an Phường Phú Hữu" />
           <Field label="Số điện thoại *" value={phone} onChangeText={setPhone} placeholder="VD: 02438123456" keyboardType="phone-pad" />
-          <Field label="Địa chỉ *" value={address} onChangeText={setAddress} placeholder="Số nhà, đường, phường..." multiline />
-          <Field label="Tỉnh / Thành phố *" value={province} onChangeText={setProvince} placeholder="VD: TP HCM" />
-          <Field label="Quận / Huyện" value={district} onChangeText={setDistrict} placeholder="VD: Quận 1" />
-          <Field label="Phường / Xã" value={ward} onChangeText={setWard} placeholder="VD: Bến Nghé" />
+          <Field label="Địa chỉ *" value={address} onChangeText={setAddress} placeholder="Số nhà, đường..." multiline />
+          
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>Tỉnh / Thành phố *</Text>
+            <TouchableOpacity 
+              style={styles.pickerButton} 
+              onPress={() => setShowProvincePicker(true)}
+            >
+              <Text style={[styles.pickerButtonText, !province && { color: "#bbb" }]}>
+                {province || "Chọn Tỉnh / Thành phố"}
+              </Text>
+              <Ionicons name="chevron-down" size={16} color="#666" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>Phường / Xã *</Text>
+            <TouchableOpacity 
+              style={[styles.pickerButton, !province && { backgroundColor: "#f5f5f5" }]} 
+              onPress={() => setShowWardPicker(true)}
+              disabled={!province}
+            >
+              <Text style={[styles.pickerButtonText, !ward && { color: "#bbb" }]}>
+                {province ? (ward || "Chọn Phường / Xã") : "Vui lòng chọn Tỉnh trước"}
+              </Text>
+              <Ionicons name="chevron-down" size={16} color="#666" />
+            </TouchableOpacity>
+          </View>
 
           <Text style={styles.sectionTitle}>Tọa độ GPS</Text>
           <Text style={styles.gpsHint}>
@@ -157,6 +195,90 @@ export default function ContributeModal({ visible, onClose, userLocation }: Prop
             )}
           </TouchableOpacity>
         </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Pickers Modal */}
+      <SearchablePickerModal
+        visible={showProvincePicker}
+        title="Chọn Tỉnh / Thành phố"
+        items={provincesData.map(p => p.name)}
+        onSelect={(val) => {
+          setProvince(val);
+          setWard("");
+          setShowProvincePicker(false);
+        }}
+        onClose={() => setShowProvincePicker(false)}
+      />
+
+      <SearchablePickerModal
+        visible={showWardPicker}
+        title="Chọn Phường / Xã"
+        items={wards}
+        onSelect={(val) => {
+          setWard(val);
+          setShowWardPicker(false);
+        }}
+        onClose={() => setShowWardPicker(false)}
+      />
+    </Modal>
+  );
+}
+
+function SearchablePickerModal({
+  visible, title, items, onSelect, onClose
+}: {
+  visible: boolean; title: string; items: string[]; onSelect: (v: string) => void; onClose: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  
+  // Lọc items dựa trên search
+  const filtered = items.filter(item => 
+    item.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <View style={pickerStyles.overlay}>
+          <View style={pickerStyles.sheet}>
+            <View style={pickerStyles.header}>
+              <Text style={pickerStyles.title}>{title}</Text>
+              <TouchableOpacity onPress={onClose}>
+                <Ionicons name="close" size={24} color="#555" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={pickerStyles.searchBox}>
+              <Ionicons name="search" size={18} color="#888" />
+              <TextInput 
+                style={pickerStyles.searchInput}
+                placeholder="Tìm kiếm..."
+                placeholderTextColor="#999"
+                value={search}
+                onChangeText={setSearch}
+              />
+              {search ? (
+                <TouchableOpacity onPress={() => setSearch("")}>
+                  <Ionicons name="close-circle" size={18} color="#bbb" />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            <FlatList
+              data={filtered}
+              keyExtractor={(item) => item}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item }) => (
+                <TouchableOpacity style={pickerStyles.item} onPress={() => onSelect(item)}>
+                  <Text style={pickerStyles.itemText}>{item}</Text>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <Text style={pickerStyles.emptyText}>Không tìm thấy kết quả</Text>
+              }
+            />
+          </View>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -224,6 +346,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#222",
   },
+  pickerButton: {
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  pickerButtonText: {
+    fontSize: 14,
+    color: "#222",
+  },
   gpsRow: { flexDirection: "row", gap: 8 },
   gpsHint: { fontSize: 12, color: "#999", marginBottom: 8 },
   infoBox: {
@@ -247,4 +384,43 @@ const styles = StyleSheet.create({
     borderRadius: 30,
   },
   submitBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+});
+
+const pickerStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
+  sheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "80%",
+    paddingBottom: 20,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  title: { fontSize: 17, fontWeight: "700", color: "#1a1a2e" },
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f5f5f5",
+    borderRadius: 10,
+    margin: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  searchInput: { flex: 1, fontSize: 15, color: "#222" },
+  item: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f5f5f5",
+  },
+  itemText: { fontSize: 15, color: "#333" },
+  emptyText: { textAlign: "center", color: "#999", padding: 20, fontSize: 14 },
 });

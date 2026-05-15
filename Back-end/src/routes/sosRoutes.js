@@ -18,7 +18,8 @@ import {
   getChatMessages,
   sendChatMessage,
   editChatMessage,
-  deleteChatMessage
+  deleteChatMessage,
+  deleteConnection
 } from "../controllers/sosConnectionController.js";
 
 const router = express.Router();
@@ -66,6 +67,9 @@ router.get("/connections", verifyToken, getConnections);
 
 // 3. Chấp nhận / Từ chối một kết nối
 router.patch("/connections/:id", verifyToken, updateConnectionStatus);
+
+// 3.5. Xóa kết nối (lịch sử chat)
+router.delete("/connections/:id", verifyToken, deleteConnection);
 
 // 4. Lấy lịch sử tin nhắn trong 1 kết nối
 router.get("/connections/:id/messages", verifyToken, getChatMessages);

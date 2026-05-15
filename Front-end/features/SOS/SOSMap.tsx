@@ -340,7 +340,6 @@ export default function SOSMap({ userLocation, sentSOSInfo, onClearSentSOS }: SO
               coordinate={{ latitude: sos.location.latitude, longitude: sos.location.longitude }}
               onPress={(e) => { e.stopPropagation(); handleMarkerPress(sos); }}
               onSelect={() => handleMarkerPress(sos)}
-              tracksViewChanges={false}
               title={CATEGORY_LABEL[sos.category] ?? "SOS"}
               description={sos.description || "Ấn để xem chi tiết"}
             >
@@ -373,7 +372,6 @@ export default function SOSMap({ userLocation, sentSOSInfo, onClearSentSOS }: SO
               coordinate={{ latitude: agency.lat, longitude: agency.lng }}
               onPress={(e) => { e.stopPropagation(); handleAgencyPress(agency); }}
               onSelect={() => handleAgencyPress(agency)}
-              tracksViewChanges={false}
             >
               <View style={[styles.agencyMarker, { backgroundColor: color, transform: [{ scale: isSelected ? 1.25 : 1 }] }]}>
                 <Text style={styles.agencyEmoji}>{AGENCY_TYPE_ICONS[agency.type] ?? "📍"}</Text>

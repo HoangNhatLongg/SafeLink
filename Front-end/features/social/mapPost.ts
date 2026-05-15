@@ -38,7 +38,7 @@ function formatRelative(iso?: string): string {
   return d.toLocaleDateString("vi-VN");
 }
 
-const PLACEHOLDER_AVATAR = require("@/Uploads/AnhDaiDien.jpg");
+const PLACEHOLDER_AVATAR = require("../../assets/images/avatar-default.jpg");
 
 /** Chuẩn hóa document Post từ API → UI PostCard */
 export function mapApiPostToUi(p: any): FeedPostUi {

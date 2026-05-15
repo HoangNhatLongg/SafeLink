@@ -9,26 +9,8 @@ import SosModeration from './pages/SosModeration';
 import AppealManagement from './pages/AppealManagement';
 import Login from './pages/Login';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
-
-// Removed DirectoryModeration placeholder
-
-
-
-function ReportModeration() {
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Báo Cáo Vi Phạm</h1>
-        <p className="text-muted-foreground mt-1">
-          Kiểm duyệt các bài đăng và bình luận bị báo cáo vi phạm
-        </p>
-      </div>
-      <div className="text-center py-12 text-muted-foreground">
-        Trang đang được phát triển...
-      </div>
-    </div>
-  );
-}
+import ReportModeration from './pages/ReportModeration';
+import ProvinceManagement from './pages/ProvinceManagement';
 
 function NotFound() {
   return (
@@ -60,6 +42,7 @@ export const router = createBrowserRouter([
       { path: 'sos', Component: SosModeration },
       { path: 'appeals', Component: AppealManagement },
       { path: 'reports', Component: ReportModeration },
+      { path: 'provinces', Component: ProvinceManagement },
       { path: '*', Component: NotFound },
     ],
   },

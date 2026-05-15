@@ -18,6 +18,7 @@ import { FilterBar, type FilterMode } from "@/features/emergency/FilterBar";
 import ContributeModal from "@/features/emergency/ContributeModal";
 import MapSection from "@/features/emergency/MapSection";
 import { getUserLocation } from "@/features/emergency/locationService";
+import { fetchProvinces, Province, sortWards } from "@/features/emergency/provinceApi";
 import { fetchDirectory, fetchNearbyDirectory } from "@/features/emergency/directoryApi";
 import { fetchVolunteers } from "@/features/emergency/volunteerApi";
 import type { Agency, AgencyType } from "@/features/emergency/types";
@@ -49,7 +50,9 @@ export default function DirectoryScreen() {
   const [search, setSearch] = useState("");
   const [selectedType, setSelectedType] = useState<AgencyType | "">("");
   const [selectedProvince, setSelectedProvince] = useState("");
-  const [selectedDistrict, setSelectedDistrict] = useState("");
+  const [selectedWard, setSelectedWard] = useState("");
+
+  const [provincesData, setProvincesData] = useState<Province[]>([]);
 
   const [allAgencies, setAllAgencies] = useState<Agency[]>([]);
   const [agencies, setAgencies] = useState<Agency[]>([]);
@@ -126,7 +129,7 @@ export default function DirectoryScreen() {
       } else {
         result = await fetchDirectory({
           province: mode === "location" ? selectedProvince || undefined : undefined,
-          district: mode === "location" ? selectedDistrict || undefined : undefined,
+          ward: mode === "location" ? selectedWard || undefined : undefined,
           limit: 200,
         });
       }
@@ -161,7 +164,7 @@ export default function DirectoryScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [mode, location, selectedProvince, selectedDistrict]);
+  }, [mode, location, selectedProvince, selectedWard]);
 
   useEffect(() => {
     const timer = setTimeout(() => loadData(), 400);
@@ -177,27 +180,24 @@ export default function DirectoryScreen() {
     } catch {
       // Lỗi load volunteers — không cần thông báo to vì tab chính thức vẫn hiện
     } finally {
-      setVolunteersLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    fetchProvinces().then(setProvincesData).catch(console.error);
   }, []);
 
 
   // ── Derived: unique provinces/districts ─────────────────────
   const provinces = useMemo(() => {
-    const all = [...new Set(allAgencies.map((a) => a.province).filter(Boolean))].sort();
-    return all;
-  }, [allAgencies]);
+    return provincesData.map(p => p.name).sort();
+  }, [provincesData]);
 
-  // We also load districts from server data; re-use agencies already loaded
-  const districts = useMemo(() => {
+  const wards = useMemo(() => {
     if (!selectedProvince) return [];
-    const all = [...new Set(
-      allAgencies
-        .filter((a) => a.province === selectedProvince && a.district)
-        .map((a) => a.district!)
-    )].sort();
-    return all;
-  }, [agencies, selectedProvince]);
+    const p = provincesData.find(x => x.name === selectedProvince);
+    return p ? sortWards(p.wards) : [];
+  }, [provincesData, selectedProvince]);
 
   // ── Render ─────────────────────────────────────────────────
   const keyExtractor = useCallback((item: Agency) => item._id ?? item.name, []);
@@ -221,10 +221,10 @@ export default function DirectoryScreen() {
         onTypeChange={setSelectedType}
         selectedProvince={selectedProvince}
         onProvinceChange={setSelectedProvince}
-        selectedDistrict={selectedDistrict}
-        onDistrictChange={setSelectedDistrict}
+        selectedWard={selectedWard}
+        onWardChange={setSelectedWard}
         provinces={provinces}
-        districts={districts}
+        wards={wards}
       />
       <View style={styles.countRow}>
         <Text style={styles.countText}>
@@ -239,7 +239,7 @@ export default function DirectoryScreen() {
       </View>
     </>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [agencies, showMap, location, mode, search, selectedType, selectedProvince, selectedDistrict, provinces, districts]);
+  ), [agencies, showMap, location, mode, search, selectedType, selectedProvince, selectedWard, provinces, wards]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>

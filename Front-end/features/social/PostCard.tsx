@@ -215,7 +215,8 @@ function PostCard({ post, onUpdated, onOpenComments, onHidden }: Props) {
     if (!(await requireAuth())) return;
     try {
       await reportPost(post.id, reason);
-      Alert.alert("", "Đã gửi báo cáo.");
+      onHidden?.(post.id);
+      Alert.alert("", "Đã gửi báo cáo. Bài viết đã được ẩn khỏi bảng tin của bạn.");
     } catch (e: any) {
       Alert.alert("Lỗi", e.message);
     }

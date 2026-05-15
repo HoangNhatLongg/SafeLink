@@ -97,7 +97,7 @@ export const getChatMessages = async (req, res) => {
     const { id } = req.params;
     const userId = req.user._id;
 
-    const connection = await SOSConnection.findById(id);
+    const connection = await SOSConnection.findById(id).populate("sosId", "sosStatus postType author");
     if (!connection) {
       return res.status(404).json({ message: "Không tìm thấy kết nối." });
     }
@@ -107,7 +107,7 @@ export const getChatMessages = async (req, res) => {
     }
 
     const messages = await ChatMessage.find({ connectionId: id }).sort({ createdAt: 1 });
-    return res.json({ messages });
+    return res.json({ messages, connection });
   } catch (err) {
     return res.status(500).json({ message: "Lỗi server.", error: err.message });
   }
@@ -223,6 +223,33 @@ export const deleteChatMessage = async (req, res) => {
     await message.save();
 
     return res.json({ message });
+  } catch (err) {
+    return res.status(500).json({ message: "Lỗi server.", error: err.message });
+  }
+};
+
+// Xóa kết nối (xóa lịch sử chat)
+export const deleteConnection = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user._id;
+
+    const connection = await SOSConnection.findById(id);
+    if (!connection) {
+      return res.status(404).json({ message: "Không tìm thấy cuộc trò chuyện." });
+    }
+
+    if (connection.senderId.toString() !== userId.toString() && connection.helperId.toString() !== userId.toString()) {
+      return res.status(403).json({ message: "Không có quyền xóa cuộc trò chuyện này." });
+    }
+
+    // Xóa tất cả tin nhắn trong kết nối này
+    await ChatMessage.deleteMany({ connectionId: id });
+    
+    // Xóa kết nối
+    await SOSConnection.findByIdAndDelete(id);
+
+    return res.json({ message: "Đã xóa lịch sử chat thành công." });
   } catch (err) {
     return res.status(500).json({ message: "Lỗi server.", error: err.message });
   }

@@ -19,7 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import ImageViewer from "react-native-image-zoom-viewer";
 import { getUserJson, type StoredUser } from "@/features/auth/utils/storage";
-import { getChatHistory, sendRestMessage, sendImageMessage, editMessage, deleteMessage, type ChatMessage } from "@/features/chat/chatApi";
+import { getChatHistory, sendRestMessage, sendImageMessage, editMessage, deleteMessage, resolveSOS, type ChatMessage, type SOSConnection } from "@/features/chat/chatApi";
 import { connectSocket, disconnectSocket, getSocket } from "@/features/chat/socketClient";
 
 export default function ChatScreen() {
@@ -27,6 +27,7 @@ export default function ChatScreen() {
   const router = useRouter();
   
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [connection, setConnection] = useState<SOSConnection | null>(null);
   const [text, setText] = useState("");
   const [me, setMe] = useState<StoredUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,6 +48,7 @@ export default function ChatScreen() {
         const res = await getChatHistory(id as string);
         if (active) {
           setMessages(res.messages || []);
+          if (res.connection) setConnection(res.connection);
         }
       } catch (e) {
         console.warn("Lỗi tải tin nhắn:", e);
@@ -318,7 +320,35 @@ export default function ChatScreen() {
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Hỗ trợ khẩn cấp</Text>
-        <View style={{ width: 40 }} />
+        
+        {/* Nút Đã hoàn thành cứu hộ */}
+        {connection && me && connection.senderId === me.id && connection.sosId?.sosStatus === "active" ? (
+          <TouchableOpacity 
+            style={styles.resolveBtn}
+            onPress={async () => {
+              Alert.alert(
+                "Xác nhận", 
+                "Bạn đã an toàn và muốn kết thúc cứu hộ? Bài đăng SOS sẽ được xóa.",
+                [
+                  { text: "Hủy", style: "cancel" },
+                  { text: "Hoàn thành", style: "default", onPress: async () => {
+                    try {
+                      await resolveSOS(connection.sosId._id);
+                      Alert.alert("Thành công", "Đã đánh dấu hoàn thành cứu hộ.");
+                      setConnection({ ...connection, sosId: { ...connection.sosId, sosStatus: "resolved" } });
+                    } catch (e: any) {
+                      Alert.alert("Lỗi", e.message || "Không thể hoàn thành.");
+                    }
+                  }}
+                ]
+              );
+            }}
+          >
+            <Ionicons name="checkmark-done-circle" size={24} color="#FF3B30" />
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 40 }} />
+        )}
       </View>
 
       {loading ? (
@@ -431,7 +461,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   msgBubbleMe: {
-    backgroundColor: "#007AFF",
+    backgroundColor: "#FF3B30",
     borderBottomRightRadius: 4,
   },
   msgBubbleOther: {
@@ -499,11 +529,17 @@ const styles = StyleSheet.create({
   sendBtn: {
     width: 40,
     height: 40,
-    backgroundColor: "#007AFF",
+    backgroundColor: "#FF3B30",
     borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 12,
     marginBottom: 0,
+  },
+  resolveBtn: {
+    width: 40, 
+    height: 40, 
+    justifyContent: "center", 
+    alignItems: "center"
   },
 });

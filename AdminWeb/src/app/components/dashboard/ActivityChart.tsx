@@ -11,7 +11,7 @@ export function ActivityChart({ data }: ActivityChartProps) {
     <Card>
       <CardHeader>
         <CardTitle>Hoạt Động Hệ Thống</CardTitle>
-        <CardDescription>Lượng truy cập và bài viết trong 30 ngày qua</CardDescription>
+        <CardDescription>Số tài khoản mới và bài viết trong 30 ngày qua</CardDescription>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
@@ -37,7 +37,7 @@ export function ActivityChart({ data }: ActivityChartProps) {
               dataKey="visits"
               stroke="hsl(var(--primary))"
               strokeWidth={2}
-              name="Lượt truy cập"
+              name="Tài khoản mới"
             />
             <Line
               type="monotone"
