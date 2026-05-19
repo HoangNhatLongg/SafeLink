@@ -20,13 +20,14 @@ function haversine(lat1, lng1, lat2, lng2) {
  */
 export const getDirectory = async (req, res) => {
   try {
-    const { province, district, type, search, page = 1, limit = 50 } = req.query;
+    const { province, district, ward, type, search, page = 1, limit = 50 } = req.query;
     const skip = (Math.max(1, parseInt(page)) - 1) * Math.min(100, parseInt(limit));
     const lmt = Math.min(100, parseInt(limit) || 50);
 
     const filter = { status: "active" };
     if (province) filter.province = new RegExp(province, "i");
     if (district) filter.district = new RegExp(district, "i");
+    if (ward) filter.ward = new RegExp(ward, "i");
     if (type) filter.type = type;
     if (search) {
       filter.$or = [
@@ -45,6 +46,7 @@ export const getDirectory = async (req, res) => {
     const volFilter = { status: "active" };
     if (province) volFilter.province = new RegExp(province, "i");
     if (district) volFilter.district = new RegExp(district, "i");
+    if (ward) volFilter.ward = new RegExp(ward, "i");
     if (type) volFilter.unitType = type;
     if (search) {
       volFilter.$or = [

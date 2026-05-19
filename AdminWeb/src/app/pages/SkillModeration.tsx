@@ -43,6 +43,7 @@ interface StepFormState {
 export default function SkillModeration() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<SkillStatus | 'all'>('pending');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [search, setSearch] = useState('');
   
   // Modal states
@@ -243,6 +244,22 @@ export default function SkillModeration() {
     return cat ? (map[cat] || 'Khác') : 'Khác';
   };
 
+  const SKILL_CATEGORIES = [
+    { key: 'all', label: 'Tất cả danh mục' },
+    { key: 'so_cap_cuu', label: 'Sơ Cấp Cứu' },
+    { key: 'pccc', label: 'PCCC' },
+    { key: 'thien_tai', label: 'Thiên Tai' },
+    { key: 'an_toan_dien', label: 'An Toàn Điện' },
+    { key: 'tai_nan', label: 'Tai Nạn' },
+    { key: 'tam_ly', label: 'Tâm Lý' },
+    { key: 'khac', label: 'Khác' },
+  ];
+
+  // Client-side filter theo category
+  const filteredItems = data?.items?.filter((item: Skill) =>
+    selectedCategory === 'all' || item.category === selectedCategory
+  ) || [];
+
   return (
     <div className="space-y-6 pb-20">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -279,6 +296,28 @@ export default function SkillModeration() {
         </div>
       </div>
 
+      {/* Category filter chips */}
+      <div className="flex flex-wrap gap-2">
+        {SKILL_CATEGORIES.map(c => (
+          <button
+            key={c.key}
+            onClick={() => setSelectedCategory(c.key)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
+              selectedCategory === c.key
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background text-muted-foreground border-border hover:bg-muted'
+            }`}
+          >
+            {c.label}
+            {selectedCategory !== c.key && data?.items && (
+              <span className="ml-1 opacity-60">
+                ({data.items.filter((i: Skill) => c.key === 'all' ? true : i.category === c.key).length})
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
       <div className="bg-card border rounded-xl overflow-hidden shadow-sm">
         <Table>
           <TableHeader>
@@ -301,12 +340,12 @@ export default function SkillModeration() {
               <TableRow>
                 <TableCell colSpan={7} className="h-32 text-center text-destructive">Lỗi khi tải dữ liệu</TableCell>
               </TableRow>
-            ) : (!data || !data.items || data.items.length === 0) ? (
+            ) : (filteredItems.length === 0) ? (
               <TableRow>
                 <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">Không có dữ liệu</TableCell>
               </TableRow>
             ) : (
-              data.items.map((item: Skill) => (
+              filteredItems.map((item: Skill) => (
                 <TableRow key={item._id}>
                   <TableCell>
                     {item.coverImage?.url ? (

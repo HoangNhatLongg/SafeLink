@@ -18,7 +18,7 @@ import {
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../components/ui/alert-dialog';
-import { Search, MapPin, MoreHorizontal, CheckCircle, Trash2, Phone, User, Eye, AlertTriangle } from 'lucide-react';
+import { Search, MapPin, MoreHorizontal, CheckCircle, Trash2, Phone, User, Eye, AlertTriangle, Users, Clock } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
@@ -123,21 +123,22 @@ export default function SosModeration() {
               <TableHead>Vị Trí</TableHead>
               <TableHead>Thời Gian</TableHead>
               <TableHead>Trạng Thái</TableHead>
+              <TableHead>Hỗ Trợ</TableHead>
               <TableHead className="w-[80px] text-right">Thao Tác</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">Đang tải dữ liệu...</TableCell>
-              </TableRow>
+                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">Đang tải dữ liệu...</TableCell>
+            </TableRow>
             ) : isError ? (
-              <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center text-destructive">Lỗi khi tải dữ liệu.</TableCell>
-              </TableRow>
+            <TableRow>
+              <TableCell colSpan={7} className="h-32 text-center text-destructive">Lỗi khi tải dữ liệu.</TableCell>
+            </TableRow>
             ) : (!data || !data.items || data.items.length === 0) ? (
-              <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">Không có dữ liệu SOS</TableCell>
+            <TableRow>
+              <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">Không có dữ liệu SOS</TableCell>
               </TableRow>
             ) : (
               data.items.map((item: SOSPost) => (
@@ -179,6 +180,66 @@ export default function SosModeration() {
                     >
                       {item.sosStatus === 'active' ? 'Đang cấp cứu' : item.sosStatus === 'resolved' ? 'Đã giải quyết' : 'Hết hạn'}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {(() => {
+                      const helpers = (item as any).helpers || [];
+                      const accepted = helpers.filter((h: any) => h.status === 'accepted');
+                      const pending = helpers.filter((h: any) => h.status === 'pending');
+                      const resolved = helpers.filter((h: any) => h.status === 'resolved');
+                      
+                      if (accepted.length === 0 && pending.length === 0 && resolved.length === 0) {
+                        return (
+                          <span className="text-xs text-muted-foreground italic flex items-center gap-1">
+                            <Users className="w-3 h-3" /> Chưa có hỗ trợ
+                          </span>
+                        );
+                      }
+                      
+                      return (
+                        <div className="space-y-1">
+                          {accepted.map((h: any) => (
+                            <div key={h._id} className="flex items-center gap-1.5">
+                              <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                                {h.helper?.avatar ? (
+                                  <img src={h.helper.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+                                ) : (
+                                  <User className="w-3 h-3 text-emerald-600" />
+                                )}
+                              </div>
+                              <span className="text-xs font-medium text-emerald-700 truncate max-w-[100px]" title={h.helper?.name}>{h.helper?.name || 'N/A'}</span>
+                              <Badge variant="outline" className="text-[10px] px-1 py-0 border-emerald-200 text-emerald-600 bg-emerald-50">Đang hỗ trợ</Badge>
+                            </div>
+                          ))}
+                          {pending.map((h: any) => (
+                            <div key={h._id} className="flex items-center gap-1.5">
+                              <div className="w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                                {h.helper?.avatar ? (
+                                  <img src={h.helper.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+                                ) : (
+                                  <Clock className="w-3 h-3 text-amber-600" />
+                                )}
+                              </div>
+                              <span className="text-xs text-amber-700 truncate max-w-[100px]" title={h.helper?.name}>{h.helper?.name || 'N/A'}</span>
+                              <Badge variant="outline" className="text-[10px] px-1 py-0 border-amber-200 text-amber-600 bg-amber-50">Chờ duyệt</Badge>
+                            </div>
+                          ))}
+                          {resolved.map((h: any) => (
+                            <div key={h._id} className="flex items-center gap-1.5">
+                              <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                                {h.helper?.avatar ? (
+                                  <img src={h.helper.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+                                ) : (
+                                  <CheckCircle className="w-3 h-3 text-blue-600" />
+                                )}
+                              </div>
+                              <span className="text-xs text-blue-700 truncate max-w-[100px]" title={h.helper?.name}>{h.helper?.name || 'N/A'}</span>
+                              <Badge variant="outline" className="text-[10px] px-1 py-0 border-blue-200 text-blue-600 bg-blue-50">Đã hỗ trợ xong</Badge>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
@@ -282,6 +343,55 @@ export default function SosModeration() {
                   </div>
                 </div>
               )}
+
+              {/* Danh sách người hỗ trợ */}
+              <div>
+                <div className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                  <Users className="w-4 h-4" /> Tình trạng hỗ trợ
+                </div>
+                {(() => {
+                  const helpers = (selectedSos as any).helpers || [];
+                  if (helpers.length === 0) {
+                    return (
+                      <div className="text-sm text-muted-foreground italic bg-slate-50 p-3 rounded-md border">
+                        Chưa có ai gửi yêu cầu hỗ trợ
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="space-y-2 bg-slate-50 p-3 rounded-md border">
+                      {helpers.map((h: any) => (
+                        <div key={h._id} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+                              {h.helper?.avatar ? (
+                                <img src={h.helper.avatar} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <User className="w-4 h-4 text-slate-500" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium">{h.helper?.name || 'N/A'}</div>
+                              <div className="text-xs text-muted-foreground">{h.helper?.phone || h.helper?.email || ''}</div>
+                            </div>
+                          </div>
+                          <Badge 
+                            variant="outline" 
+                            className={h.status === 'accepted' 
+                              ? 'border-emerald-200 text-emerald-600 bg-emerald-50' 
+                              : h.status === 'resolved'
+                              ? 'border-blue-200 text-blue-600 bg-blue-50'
+                              : 'border-amber-200 text-amber-600 bg-amber-50'
+                            }
+                          >
+                            {h.status === 'accepted' ? 'Đang hỗ trợ' : h.status === 'resolved' ? 'Đã hỗ trợ xong' : 'Chờ duyệt'}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           )}
         </DialogContent>

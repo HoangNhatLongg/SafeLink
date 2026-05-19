@@ -101,6 +101,12 @@ export default function DirectoryScreen() {
     if (selectedType) {
       filtered = filtered.filter((a) => a.type === selectedType);
     }
+    if (selectedProvince) {
+      filtered = filtered.filter((a) => a.province === selectedProvince);
+    }
+    if (selectedWard) {
+      filtered = filtered.filter((a) => a.ward === selectedWard);
+    }
     if (search && mode !== "nearby") {
       const q = search.toLowerCase();
       filtered = filtered.filter(
@@ -111,7 +117,7 @@ export default function DirectoryScreen() {
       );
     }
     setAgencies(filtered);
-  }, [allAgencies, selectedType, search, mode]);
+  }, [allAgencies, selectedType, selectedProvince, selectedWard, search, mode]);
 
   // ── Load data (chỉ gọi API, không filter tại đây) ────────────────────
   const loadData = useCallback(async (isRefresh = false) => {

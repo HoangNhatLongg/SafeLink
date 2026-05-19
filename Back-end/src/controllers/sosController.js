@@ -1,5 +1,6 @@
 import Post from "../models/postModel.js";
 import User from "../models/userModel.js";
+import SOSConnection from "../models/sosConnectionModel.js";
 import { isCloudinaryConfigured, uploadImageToCloudinary, getMediaUrl } from "../middleware/upload.js";
 import { sendSOSNotification, sendSOSAdminNotification } from "../services/notificationService.js";
 import { cacheDelPattern } from "../utils/cache.js";
@@ -275,6 +276,12 @@ export const resolveSOS = async (req, res) => {
     post.status = "deleted"; // Ẩn khỏi feed bình thường
     await post.save();
 
+    // ── Cập nhật tất cả connections sang resolved ──────────────
+    await SOSConnection.updateMany(
+      { sosId: id, status: { $in: ["accepted", "pending"] } },
+      { status: "resolved" }
+    );
+
     // ── Xóa tọa độ khỏi PostgreSQL/PostGIS ────────────────────────
     try {
       await deletePostLocation(id);
@@ -356,10 +363,6 @@ export const getAllSOSAdmin = async (req, res) => {
       filter.sosStatus = status;
     }
     
-    // Không hiển thị các bài viết đã bị xóa cứng/mềm hoàn toàn bởi Admin
-    // Trừ khi họ chủ động muốn xem (ở đây ta mặc định không hiện 'deleted' status nếu không cần)
-    // Hiện tại post.status = "deleted" được dùng khi user resolve SOS. Vậy ta vẫn lấy, chỉ bỏ qua khi cần.
-    
     if (search) {
       filter.$or = [
         { content: { $regex: search, $options: "i" } },
@@ -382,9 +385,37 @@ export const getAllSOSAdmin = async (req, res) => {
       Post.countDocuments(filter),
     ]);
 
+    // Gắn danh sách người hỗ trợ (accepted connections) cho mỗi SOS
+    const sosIds = items.map(i => i._id);
+    const connections = await SOSConnection.find({
+      sosId: { $in: sosIds },
+      status: { $in: ["accepted", "pending", "resolved"] },
+    })
+      .populate("helperId", "name email avatar phone")
+      .lean();
+
+    // Gom connections theo sosId
+    const connMap = {};
+    for (const c of connections) {
+      const key = c.sosId.toString();
+      if (!connMap[key]) connMap[key] = [];
+      connMap[key].push({
+        _id: c._id,
+        helper: c.helperId,
+        status: c.status,
+        createdAt: c.createdAt,
+      });
+    }
+
+    // Gắn vào từng item
+    const enrichedItems = items.map(item => ({
+      ...item,
+      helpers: connMap[item._id.toString()] || [],
+    }));
+
     return res.json({
       message: "Lấy danh sách SOS thành công",
-      data: items,
+      data: enrichedItems,
       meta: {
         total,
         page: pageNum,
@@ -413,6 +444,12 @@ export const deleteSOSAdmin = async (req, res) => {
     post.status = "deleted"; // Xóa mềm
     post.deletedAt = new Date();
     await post.save();
+
+    // ── Cập nhật tất cả connections sang resolved ──────────────
+    await SOSConnection.updateMany(
+      { sosId: id, status: { $in: ["accepted", "pending"] } },
+      { status: "resolved" }
+    );
 
     // Xóa vị trí khỏi hệ thống Postgres GIS để không hiển thị nữa
     try {

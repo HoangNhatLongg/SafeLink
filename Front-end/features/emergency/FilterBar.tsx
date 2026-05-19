@@ -199,23 +199,49 @@ function PickerModal({
   onClose: () => void;
   showAll?: boolean;
 }) {
+  const [search, setSearch] = useState("");
+
+  const filtered = search
+    ? items.filter((item) => item.toLowerCase().includes(search.toLowerCase()))
+    : items;
+
+  const data = showAll ? ["", ...filtered] : filtered;
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={pickerStyles.overlay}>
         <View style={pickerStyles.sheet}>
           <View style={pickerStyles.header}>
             <Text style={pickerStyles.title}>{title}</Text>
-            <TouchableOpacity onPress={onClose}>
+            <TouchableOpacity onPress={() => { setSearch(""); onClose(); }}>
               <Ionicons name="close" size={22} color="#555" />
             </TouchableOpacity>
           </View>
+
+          <View style={pickerStyles.searchBox}>
+            <Ionicons name="search" size={18} color="#888" />
+            <TextInput
+              style={pickerStyles.searchInput}
+              placeholder="Tìm kiếm..."
+              placeholderTextColor="#999"
+              value={search}
+              onChangeText={setSearch}
+            />
+            {search ? (
+              <TouchableOpacity onPress={() => setSearch("")}>
+                <Ionicons name="close-circle" size={18} color="#bbb" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
           <FlatList
-            data={showAll ? ["", ...items] : items}
+            data={data}
             keyExtractor={(item, i) => item || `all-${i}`}
+            keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => (
               <TouchableOpacity
                 style={[pickerStyles.item, selected === item && pickerStyles.itemActive]}
-                onPress={() => onSelect(item)}
+                onPress={() => { setSearch(""); onSelect(item); }}
               >
                 <Text style={[pickerStyles.itemText, selected === item && pickerStyles.itemTextActive]}>
                   {item || "Tất cả"}
@@ -223,6 +249,9 @@ function PickerModal({
                 {selected === item && <Ionicons name="checkmark" size={18} color="#e53935" />}
               </TouchableOpacity>
             )}
+            ListEmptyComponent={
+              <Text style={pickerStyles.emptyText}>Không tìm thấy kết quả</Text>
+            }
           />
         </View>
       </View>
@@ -325,6 +354,18 @@ const pickerStyles = StyleSheet.create({
     borderBottomColor: "#eee",
   },
   title: { fontSize: 16, fontWeight: "700", color: "#1a1a2e" },
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f5f5f5",
+    borderRadius: 10,
+    marginHorizontal: 16,
+    marginVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  searchInput: { flex: 1, fontSize: 15, color: "#222" },
   item: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -337,4 +378,5 @@ const pickerStyles = StyleSheet.create({
   itemActive: { backgroundColor: "#fdf1f1" },
   itemText: { fontSize: 15, color: "#333" },
   itemTextActive: { color: "#e53935", fontWeight: "600" },
+  emptyText: { textAlign: "center", color: "#999", padding: 20, fontSize: 14 },
 });

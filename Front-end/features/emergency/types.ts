@@ -6,7 +6,6 @@ export type AgencyType =
   | "cuu_thuong"
   | "sua_xe_cap_cuu"
   | "ho_tro_sos"
-  | "khac";
 
 export type AgencyStatus = "active" | "pending" | "rejected";
 
@@ -48,7 +47,6 @@ export const AGENCY_TYPE_LABELS: Record<AgencyType, string> = {
   cuu_thuong:     "Cấp Cứu",
   sua_xe_cap_cuu: "Sửa Xe CĐ",
   ho_tro_sos:     "Hỗ Trợ SOS",
-  khac:           "Khác",
 };
 
 export const AGENCY_TYPE_COLORS: Record<AgencyType, string> = {
@@ -59,7 +57,6 @@ export const AGENCY_TYPE_COLORS: Record<AgencyType, string> = {
   cuu_thuong:     "#E65100",
   sua_xe_cap_cuu: "#5D4037",
   ho_tro_sos:     "#6A1B9A",
-  khac:           "#616161",
 };
 
 /** Icon dùng trong badge & chip (emoji cho đơn giản & cross-platform) */
@@ -85,8 +82,7 @@ export const AGENCY_TYPE_IONICONS: Record<AgencyType, string> = {
   benh_vien:      "medical",
   cuu_thuong:     "medkit",
   sua_xe_cap_cuu: "build",
-  ho_tro_sos:     "hand-left",
-  khac:           "help-circle",
+  ho_tro_sos:     "hand-left"
 };
 
 /**

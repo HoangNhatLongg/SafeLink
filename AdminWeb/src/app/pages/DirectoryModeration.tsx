@@ -32,6 +32,7 @@ import { provinceApi, Province } from '../services/provinceApi';
 export default function DirectoryModeration() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<DirectoryStatus | 'all'>('pending');
+  const [selectedType, setSelectedType] = useState<string>('all');
   const [search, setSearch] = useState('');
   
   // Modal states
@@ -146,10 +147,28 @@ export default function DirectoryModeration() {
 
   const getTypeLabel = (type: string) => {
     const map: Record<string, string> = {
-      csgt: 'CSGT', pccc: 'PCCC', canh_sat: 'Cảnh sát', benh_vien: 'Bệnh viện', cuu_thuong: 'Cứu thương', khac: 'Khác'
+      csgt: 'CSGT', pccc: 'PCCC', canh_sat: 'Cảnh sát', benh_vien: 'Bệnh viện', 
+      cuu_thuong: 'Cứu thương', sua_xe_cap_cuu: 'Sửa xe', ho_tro_sos: 'Hỗ Trợ SOS', khac: 'Khác'
     };
     return map[type] || 'Khác';
   };
+
+  const DIRECTORY_TYPES = [
+    { key: 'all', label: 'Tất cả loại' },
+    { key: 'csgt', label: 'CSGT' },
+    { key: 'pccc', label: 'PCCC' },
+    { key: 'canh_sat', label: 'Cảnh sát' },
+    { key: 'benh_vien', label: 'Bệnh viện' },
+    { key: 'cuu_thuong', label: 'Cứu thương' },
+    { key: 'sua_xe_cap_cuu', label: 'Sửa xe' },
+    { key: 'ho_tro_sos', label: 'Hỗ Trợ SOS' },
+    { key: 'khac', label: 'Khác' },
+  ];
+
+  // Client-side filter theo type
+  const filteredItems = data?.items?.filter((item: DirectoryEntry) => 
+    selectedType === 'all' || item.type === selectedType
+  ) || [];
 
   const selectedProvinceData = provincesData.find((p: Province) => p.name === currentEntry.province);
   const wards = selectedProvinceData ? selectedProvinceData.wards : [];
@@ -189,6 +208,28 @@ export default function DirectoryModeration() {
         </div>
       </div>
 
+      {/* Type filter chips */}
+      <div className="flex flex-wrap gap-2">
+        {DIRECTORY_TYPES.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setSelectedType(t.key)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
+              selectedType === t.key
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background text-muted-foreground border-border hover:bg-muted'
+            }`}
+          >
+            {t.label}
+            {selectedType !== t.key && data?.items && (
+              <span className="ml-1 opacity-60">
+                ({data.items.filter((i: DirectoryEntry) => t.key === 'all' ? true : i.type === t.key).length})
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
       <div className="bg-card border rounded-xl overflow-hidden shadow-sm">
         <Table>
           <TableHeader>
@@ -210,12 +251,12 @@ export default function DirectoryModeration() {
               <TableRow>
                 <TableCell colSpan={6} className="h-32 text-center text-destructive">Lỗi khi tải dữ liệu. Bạn có đủ quyền không?</TableCell>
               </TableRow>
-            ) : (!data || !data.items || data.items.length === 0) ? (
+            ) : (filteredItems.length === 0) ? (
               <TableRow>
                 <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">Không có dữ liệu</TableCell>
               </TableRow>
             ) : (
-              data.items.map((item: DirectoryEntry) => (
+              filteredItems.map((item: DirectoryEntry) => (
                 <TableRow key={item._id}>
                   <TableCell>
                     <div className="font-medium text-foreground">{item.name}</div>
